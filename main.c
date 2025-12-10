@@ -4,29 +4,26 @@
 #include "JsonMethods.h"
 
 char* FileToString(const char* filename);
-char* StringWithoutWhitespace(const char* array, int len);
 
 int main(void)
 {
-    char* FileContents = FileToString("input.json");
+    char* fileContents = FileToString("input.json");
 
-    if (!FileContents) {
+    if (!fileContents) {
         printf("Failed to read JSON file.\n");
         return 1;
     }
 
-    printf("File contents:\n%s\n", FileContents);
+    JsonMethods_Deserialize(fileContents);
 
-    JsonMethods_Deserialize(FileContents);
-
-    free(FileContents);
+    free(fileContents);
 
     return 0;
 }
 
-char* FileToString(const char* filename)
+char* FileToString(const char* fileName)
 {
-    FILE* file = fopen(filename, "rb");
+    FILE* file = fopen(fileName, "rb");
     if (!file) return NULL;
 
     // move to end to determine file size
@@ -35,7 +32,7 @@ char* FileToString(const char* filename)
     rewind(file);
 
     // allocate buffer
-    char* buffer = malloc(sizeof(char) * size + sizeof(char));
+    char* buffer = malloc(size + 1);
     if (!buffer)
     {
         fclose(file);
