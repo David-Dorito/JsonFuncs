@@ -64,6 +64,7 @@ void JsonMethods_Deserialize(char* rawJson)
     FillTokenArray(tokens, json);
 
     //output tokens
+    printf("token array\n");
     for (int i = 0; i < tokenAmount; i++)
     {
         if (tokens[i].Type == STRING) printf("[ %s ]", tokens[i].Value.StringValue);
@@ -71,6 +72,7 @@ void JsonMethods_Deserialize(char* rawJson)
         else if (tokens[i].Type == NULLVALUE) printf("[ NULL ]");
         else printf("[ %c ]", tokens[i].Value.CharValue);
     }
+    printf("\n");
 
     int requiredTokenAmount = GetRequiredTokenAmount(tokens, tokenAmount);
     Token* requiredTokens = RemoveRedundantTokens(tokens, tokenAmount, requiredTokenAmount);
@@ -81,6 +83,7 @@ void JsonMethods_Deserialize(char* rawJson)
         goto RequiredTokenAllocError;
     }
 
+    printf("new token array\n");
     //output tokens
     for (int i = 0; i < requiredTokenAmount; i++)
     {
@@ -89,6 +92,7 @@ void JsonMethods_Deserialize(char* rawJson)
         else if (requiredTokens[i].Type == NULLVALUE) printf("[ NULL ]");
         else printf("[ %c ]", requiredTokens[i].Value.CharValue);
     }
+    printf("\n");
 
     //free string value in tokens
     for (int i = 0; i < tokenAmount; i++)
@@ -167,20 +171,20 @@ void FillTokenArray(Token* tokens, char* json)
             while (json[j] != '\0' && strchr("1234567890.", json[j]) != NULL) j++;
             int stringSize = j-i;
 
-            int NumIndex = 0;
+            int numIndex = 0;
             char* value = malloc(stringSize+1);
             for (int j = 0; j < stringSize+1; j++) value[j] = '\0';
-            value[NumIndex++] = json[i];
+            value[numIndex++] = json[i];
             while (json[i + 1] != '\0' && strchr("1234567890.", json[i + 1]) != NULL)
             {
                 i++;
-                value[NumIndex++] = json[i];
+                value[numIndex++] = json[i];
             }
-            Token NextToken = {
+
+            tokens[nextTokenIndex++] = (Token){
                 .Type = NUMBER,
                 .Value.NumberValue = atof(value)
             };
-            tokens[nextTokenIndex++] = NextToken;
             free(value);
         }
         else if (json[i] == '\"')
@@ -196,11 +200,10 @@ void FillTokenArray(Token* tokens, char* json)
             int index = 0;
             while (json[i] != '\"') value[index++] = json[i++];
             
-            Token NextToken = {
+            tokens[nextTokenIndex++] = (Token){
                 .Type = STRING,
                 .Value.StringValue = value
             };
-            tokens[nextTokenIndex++] = NextToken;
         }
         else if (strchr("{}[]:,", json[i]) != NULL)
         {
@@ -215,21 +218,19 @@ void FillTokenArray(Token* tokens, char* json)
                 case ',': type = COMMA; break;
             }
 
-            Token NextToken = {
+            tokens[nextTokenIndex++] = (Token){
                 .Type = type,
                 .Value.CharValue = json[i]
             };
-            tokens[nextTokenIndex++] = NextToken;
         }
         else if (json[i] == 'n')
         {
             while (strchr("ul", json[i+1]) != NULL) i++;
 
-            Token NextToken = {
+            tokens[nextTokenIndex++] = (Token){
                 .Type = NULLVALUE,
                 .Value.CharValue = '\0'
             };
-            tokens[nextTokenIndex++] = NextToken;
         }
     }
 }
@@ -252,7 +253,6 @@ int GetRequiredTokenAmount(Token* tokens, int tokenAmount)
 Token* RemoveRedundantTokens(Token* tokens, int tokenAmount, int newTokenAmount)
 {
     int invalidIndexes[tokenAmount];
-    for (int i = 0; i < tokenAmount; i++) invalidIndexes[i] = 0;
     for (int i = 0; i < tokenAmount; i++)
     {
         if (tokens[i].Type == LEFT_BRACE)
@@ -265,6 +265,7 @@ Token* RemoveRedundantTokens(Token* tokens, int tokenAmount, int newTokenAmount)
             }
         }
         else if (tokens[i].Type == RIGHT_BRACE) invalidIndexes[i] = 1;
+        else invalidIndexes[i] = 0;
     }
 
     Token* newTokenArray = calloc(newTokenAmount, sizeof(Token));
@@ -272,6 +273,7 @@ Token* RemoveRedundantTokens(Token* tokens, int tokenAmount, int newTokenAmount)
 
     int index = 0;
     for (int i = 0; i < tokenAmount; i++)
+    {
         if (!invalidIndexes[i])
         {
             Token newToken = {
@@ -286,8 +288,9 @@ Token* RemoveRedundantTokens(Token* tokens, int tokenAmount, int newTokenAmount)
                 default: newToken.Value.CharValue = tokens[i].Value.CharValue; break;
             }
 
-            newTokenArray[index++] = tokens[i];
+            newTokenArray[index++] = newToken;
         }
+    }
 
     return newTokenArray;
 }
