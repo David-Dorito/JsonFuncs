@@ -36,6 +36,8 @@ typedef struct {
 char* StringWithoutWhitespace(const char* array, int len);
 int GetTokenAmount(char* json);
 void FillTokenArray(Token* tokens, char* json);
+Token* RemoveRedundantTokens(Token* tokens, int tokenAmount);
+int GetRequiredTokenAmount(Token* tokens, int tokenAmount);
 
 void JsonMethods_Deserialize(char* rawJson)
 {
@@ -50,12 +52,12 @@ void JsonMethods_Deserialize(char* rawJson)
     printf("%s\n", json);
 
     int tokenAmount = GetTokenAmount(json);
-    printf("Token amount: %d\n", tokenAmount);
+    printf("token amount: %d\n", tokenAmount);
     Token* tokens = calloc(tokenAmount, sizeof(Token));
 
     if (tokens == NULL)
     {
-        printf("Failed to allocate token memory.\n");
+        printf("Failed to allocate token memory\n");
         goto TokenAllocError;
     }
     
@@ -70,11 +72,20 @@ void JsonMethods_Deserialize(char* rawJson)
         else printf("[ %c ]", tokens[i].Value.CharValue);
     }
 
+    Token* requiredTokens = RemoveRedundantTokens(tokens, tokenAmount);
+    int requiredTokenAmount = GetRequiredTokenAmount(tokens, tokenAmount);
+    //output tokens
+    for (int i = 0; i < requiredTokenAmount; i++)
+    {
+        if (requiredTokens[i].Type == STRING) printf("[ %s ]", requiredTokens[i].Value.StringValue);
+        else if (requiredTokens[i].Type == NUMBER) printf("[ %f ]", requiredTokens[i].Value.NumberValue);
+        else if (requiredTokens[i].Type == NULLVALUE) printf("[ NULL ]");
+        else printf("[ %c ]", requiredTokens[i].Value.CharValue);
+    }
+
     //free string value in tokens
     for (int i = 0; i < tokenAmount; i++)
-    {
-        free(tokens[i].Value.StringValue);
-    }
+        if (tokens[i].Type == STRING) free(tokens[i].Value.StringValue);
 
     free(tokens);
 
@@ -142,9 +153,13 @@ void FillTokenArray(Token* tokens, char* json)
     {
         if (strchr("1234567890.", json[i]) != NULL)
         {
+            int j = i;
+            while (json[j] != '\0' && strchr("1234567890.", json[j]) != NULL) j++;
+            int stringSize = j-i;
+
             int NumIndex = 0;
-            char value[20];
-            for (int j = 0; j < 20; j++) value[j] = '\0';
+            char* value = malloc(stringSize+1);
+            for (int j = 0; j < stringSize+1; j++) value[j] = '\0';
             value[NumIndex++] = json[i];
             while (json[i + 1] != '\0' && strchr("1234567890.", json[i + 1]) != NULL)
             {
@@ -156,6 +171,7 @@ void FillTokenArray(Token* tokens, char* json)
                 .Value.NumberValue = atof(value)
             };
             tokens[nextTokenIndex++] = NextToken;
+            free(value);
         }
         else if (json[i] == '\"')
         {
@@ -206,4 +222,56 @@ void FillTokenArray(Token* tokens, char* json)
             tokens[nextTokenIndex++] = NextToken;
         }
     }
+}
+
+int GetRequiredTokenAmount(Token* tokens, int tokenAmount)
+{
+    int newTokenAmount = tokenAmount;
+    for (int i = 0; i < tokenAmount; i++)
+    {
+        if (tokens[i].Type == LEFT_BRACE)
+        {
+            newTokenAmount--;
+            if (i > 1 && tokens[i-1].Type == COLON) newTokenAmount-=2;
+        }
+        else if (tokens[i].Type == RIGHT_BRACE) newTokenAmount--;
+    }
+    return newTokenAmount;
+}
+
+Token* RemoveRedundantTokens(Token* tokens, int tokenAmount)
+{
+    int newTokenAmount = tokenAmount;
+    int invalidIndexes[tokenAmount];
+    for (int i = 0; i < tokenAmount; i++) invalidIndexes[i] = 0;
+    for (int i = 0; i < tokenAmount; i++)
+    {
+        if (tokens[i].Type == LEFT_BRACE)
+        {
+            newTokenAmount--;
+            invalidIndexes[i] = 1;
+            if (i > 1 && tokens[i-1].Type == COLON)
+            {
+                newTokenAmount-=2;
+                invalidIndexes[i-1] = 1;
+                invalidIndexes[i-2] = 1;
+            }
+        }
+        else if (tokens[i].Type == RIGHT_BRACE)
+        {
+            newTokenAmount--;
+            invalidIndexes[i] = 1;
+        }
+    }
+    printf("new token amount: %d\n", newTokenAmount);
+
+    Token* newTokenArray = calloc(newTokenAmount, sizeof(Token));
+
+    for (int i = 0; i < tokenAmount; i++)
+    {
+        int index = 0;
+        if (!invalidIndexes[i]) newTokenArray[index++] = tokens[i];
+    }
+
+    return newTokenArray;
 }
