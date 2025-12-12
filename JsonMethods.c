@@ -52,6 +52,13 @@ void JsonMethods_Deserialize(char* rawJson)
     printf("%s\n", json);
 
     int tokenAmount = GetTokenAmount(json);
+
+    if (tokenAmount == -1)
+    {
+        printf("invalid json\n");
+        return;
+    }
+
     printf("token amount: %d\n", tokenAmount);
     Token* tokens = calloc(tokenAmount, sizeof(Token));
 
@@ -70,6 +77,7 @@ void JsonMethods_Deserialize(char* rawJson)
         if (tokens[i].Type == STRING) printf("[ %s ]", tokens[i].Value.StringValue);
         else if (tokens[i].Type == NUMBER) printf("[ %f ]", tokens[i].Value.NumberValue);
         else if (tokens[i].Type == NULLVALUE) printf("[ NULL ]");
+        else if (tokens[i].Type == BOOL) printf("[ %f ]", tokens[i].Value.NumberValue);
         else printf("[ %c ]", tokens[i].Value.CharValue);
     }
     printf("\n");
@@ -90,6 +98,7 @@ void JsonMethods_Deserialize(char* rawJson)
         if (requiredTokens[i].Type == STRING) printf("[ %s ]", requiredTokens[i].Value.StringValue);
         else if (requiredTokens[i].Type == NUMBER) printf("[ %f ]", requiredTokens[i].Value.NumberValue);
         else if (requiredTokens[i].Type == NULLVALUE) printf("[ NULL ]");
+        else if (requiredTokens[i].Type == BOOL) printf("[ %f ]", requiredTokens[i].Value.NumberValue);
         else printf("[ %c ]", requiredTokens[i].Value.CharValue);
     }
     printf("\n");
@@ -149,10 +158,24 @@ int GetTokenAmount(char* json)
             i++;
             while (json[i] != '\"') i++;
         }
-        else if (json[i] == 'n')
+        else if (isalpha(json[i]))
         {
+            printf("char: %c\n", json[i]);
+            const int start = i;
+            while (isalpha(json[i])) i++;
+            const int len = i - start;
+
+            char buffer[8];
+            memcpy(buffer, &json[start], len);
+            buffer[len] = '\0';
+            printf("string: %s\n", buffer);
+
             tokenAmount++;
-            while (strchr("ul", json[i+1]) != NULL) i++;
+            i--;
+            if (!strcmp(buffer, "null")) continue;
+            else if (!strcmp(buffer, "true")) continue;
+            else if (!strcmp(buffer, "false")) continue;
+            else return -1; //invalid json
         }
         else if (strchr("{}[]:,", json[i]) != NULL) tokenAmount++;
     }
@@ -223,13 +246,28 @@ void FillTokenArray(Token* tokens, char* json)
                 .Value.CharValue = json[i]
             };
         }
-        else if (json[i] == 'n')
+        else if (isalpha(json[i]))
         {
-            while (strchr("ul", json[i+1]) != NULL) i++;
+            const int start = i;
+            while (isalpha(json[i])) i++;
+            const int len = i - start;
 
-            tokens[nextTokenIndex++] = (Token){
+            char buffer[8];
+            memcpy(buffer, &json[start], len);
+            buffer[len] = '\0';
+
+            i--;
+            if (!strcmp(buffer, "null")) tokens[nextTokenIndex++] = (Token){
                 .Type = NULLVALUE,
                 .Value.CharValue = '\0'
+            };
+            else if (!strcmp(buffer, "true")) tokens[nextTokenIndex++] = (Token){
+                .Type = BOOL,
+                .Value.NumberValue = 1
+            };
+            else if (!strcmp(buffer, "false")) tokens[nextTokenIndex++] = (Token){
+                .Type = BOOL,
+                .Value.NumberValue = 0
             };
         }
     }
