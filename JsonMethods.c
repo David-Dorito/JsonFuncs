@@ -21,6 +21,7 @@ typedef enum {
     NUMBER,
     BOOL,
     NULLVALUE,
+    ARRAY
 } TokenType;
  
 typedef struct {
@@ -71,16 +72,17 @@ void JsonMethods_Deserialize(char* rawJson)
     FillTokenArray(tokens, json);
 
     //output tokens
-    printf("token array\n");
+    printf("token array\n[");
     for (int i = 0; i < tokenAmount; i++)
     {
-        if (tokens[i].Type == STRING) printf("[ %s ]", tokens[i].Value.StringValue);
-        else if (tokens[i].Type == NUMBER) printf("[ %f ]", tokens[i].Value.NumberValue);
-        else if (tokens[i].Type == NULLVALUE) printf("[ NULL ]");
-        else if (tokens[i].Type == BOOL) printf("[ %f ]", tokens[i].Value.NumberValue);
-        else printf("[ %c ]", tokens[i].Value.CharValue);
+        if (tokens[i].Type == STRING) printf(" %s ", tokens[i].Value.StringValue);
+        else if (tokens[i].Type == NUMBER) printf(" %f ", tokens[i].Value.NumberValue);
+        else if (tokens[i].Type == NULLVALUE) printf(" NULL ");
+        else if (tokens[i].Type == BOOL) printf(" %f ", tokens[i].Value.NumberValue);
+        else if (tokens[i].Type == ARRAY) printf(" %s ", tokens[i].Value.StringValue);
+        else printf(" %c ", tokens[i].Value.CharValue);
     }
-    printf("\n");
+    printf("]\n");
 
     int requiredTokenAmount = GetRequiredTokenAmount(tokens, tokenAmount);
     Token* requiredTokens = RemoveRedundantTokens(tokens, tokenAmount, requiredTokenAmount);
@@ -91,21 +93,22 @@ void JsonMethods_Deserialize(char* rawJson)
         goto RequiredTokenAllocError;
     }
 
-    printf("new token array\n");
+    printf("new token array\n[");
     //output tokens
     for (int i = 0; i < requiredTokenAmount; i++)
     {
-        if (requiredTokens[i].Type == STRING) printf("[ %s ]", requiredTokens[i].Value.StringValue);
-        else if (requiredTokens[i].Type == NUMBER) printf("[ %f ]", requiredTokens[i].Value.NumberValue);
-        else if (requiredTokens[i].Type == NULLVALUE) printf("[ NULL ]");
-        else if (requiredTokens[i].Type == BOOL) printf("[ %f ]", requiredTokens[i].Value.NumberValue);
-        else printf("[ %c ]", requiredTokens[i].Value.CharValue);
+        if (requiredTokens[i].Type == STRING) printf(" %s ", requiredTokens[i].Value.StringValue);
+        else if (requiredTokens[i].Type == NUMBER) printf(" %f ", requiredTokens[i].Value.NumberValue);
+        else if (requiredTokens[i].Type == NULLVALUE) printf(" NULL ");
+        else if (requiredTokens[i].Type == BOOL) printf(" %f ", requiredTokens[i].Value.NumberValue);
+        else if (requiredTokens[i].Type == ARRAY) printf(" %s ", requiredTokens[i].Value.StringValue);
+        else printf(" %c ", requiredTokens[i].Value.CharValue);
     }
-    printf("\n");
+    printf("]\n");
 
     //free string value in tokens
     for (int i = 0; i < tokenAmount; i++)
-        if (tokens[i].Type == STRING) free(tokens[i].Value.StringValue);
+        if (tokens[i].Type == STRING || tokens[i].Type == ARRAY) free(tokens[i].Value.StringValue);
 
     free(requiredTokens);
 
@@ -160,7 +163,6 @@ int GetTokenAmount(char* json)
         }
         else if (isalpha(json[i]))
         {
-            printf("char: %c\n", json[i]);
             const int start = i;
             while (isalpha(json[i])) i++;
             const int len = i - start;
@@ -168,7 +170,6 @@ int GetTokenAmount(char* json)
             char buffer[8];
             memcpy(buffer, &json[start], len);
             buffer[len] = '\0';
-            printf("string: %s\n", buffer);
 
             tokenAmount++;
             i--;
@@ -177,7 +178,12 @@ int GetTokenAmount(char* json)
             else if (!strcmp(buffer, "false")) continue;
             else return -1; //invalid json
         }
-        else if (strchr("{}[]:,", json[i]) != NULL) tokenAmount++;
+        else if (json[i] == '[')
+        {
+            tokenAmount++;
+            while (json[i] != ']') i++;
+        }
+        else if (strchr("{}:,", json[i]) != NULL) tokenAmount++;
     }
 
     return tokenAmount;
@@ -228,15 +234,28 @@ void FillTokenArray(Token* tokens, char* json)
                 .Value.StringValue = value
             };
         }
-        else if (strchr("{}[]:,", json[i]) != NULL)
+        else if (json[i] == '[')
+        {
+            int start = i;
+            int len = json[i+1] != ']'; //start at 1 if array isnt empty
+            while (json[++i] != ']') len++;
+
+            char* arrayString = malloc(len + 1);
+            memcpy(arrayString, &json[start], len + 1);
+            arrayString[len] == '\0';
+            
+            tokens[nextTokenIndex++] = (Token){
+                .Type = ARRAY,
+                .Value.StringValue = arrayString
+            };
+        }
+        else if (strchr("{}:,", json[i]) != NULL)
         {
             TokenType type;
             switch (json[i])
             {
                 case '{': type = LEFT_BRACE; break;
                 case '}': type = RIGHT_BRACE; break;
-                case '[': type = LEFT_BRACKET; break;
-                case ']': type = RIGHT_BRACKET; break;
                 case ':': type = COLON; break;
                 case ',': type = COMMA; break;
             }
@@ -323,6 +342,7 @@ Token* RemoveRedundantTokens(Token* tokens, int tokenAmount, int newTokenAmount)
                 case STRING: newToken.Value.StringValue = tokens[i].Value.StringValue; break;
                 case NUMBER: newToken.Value.NumberValue = tokens[i].Value.NumberValue; break;
                 case BOOL: newToken.Value.NumberValue = tokens[i].Value.NumberValue; break;
+                case ARRAY: newToken.Value.StringValue = tokens[i].Value.StringValue; break;
                 default: newToken.Value.CharValue = tokens[i].Value.CharValue; break;
             }
 
