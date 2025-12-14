@@ -34,11 +34,18 @@ typedef struct {
     } Value;
 } Token;
 
+typedef struct {
+    Token* Key;
+    Token* Value;
+} Pair;
+
 char* StringWithoutWhitespace(const char* array, int len);
 int GetTokenAmount(char* json);
 void FillTokenArray(Token* tokens, char* json);
 Token* RemoveRedundantTokens(Token* tokens, int tokenAmount, int newTokenAmount);
 int GetRequiredTokenAmount(Token* tokens, int tokenAmount);
+int GetTokenPairAmount();
+Pair* GetTokenPairs();
 
 void JsonMethods_Deserialize(char* rawJson)
 {
@@ -105,6 +112,23 @@ void JsonMethods_Deserialize(char* rawJson)
         else printf(" %c ", requiredTokens[i].Value.CharValue);
     }
     printf("]\n");
+
+    int tokenPairAmount = GetTokenPairAmount(requiredTokens, requiredTokenAmount);
+    Pair* tokenPairs = GetTokenPairs(requiredTokens, requiredTokenAmount, tokenPairAmount);
+
+    printf("pair array\n");
+    //output pairs
+    for (int i = 0; i < tokenPairAmount; i++)
+    {
+        printf("[ %s : ", tokenPairs[i].Key->Value.StringValue);
+        if (tokenPairs[i].Value->Type == STRING) printf(" %s ]", tokenPairs[i].Value->Value.StringValue);
+        else if (tokenPairs[i].Value->Type == NUMBER) printf(" %f ]", tokenPairs[i].Value->Value.NumberValue);
+        else if (tokenPairs[i].Value->Type == NULLVALUE) printf(" NULL ]");
+        else if (tokenPairs[i].Value->Type == BOOL) printf(" %f ]", tokenPairs[i].Value->Value.NumberValue);
+        else if (tokenPairs[i].Value->Type == ARRAY) printf(" %s ]", tokenPairs[i].Value->Value.StringValue);
+        else printf(" %c ]", tokenPairs[i].Value->Value.CharValue);
+    }
+    printf("\n");
 
     //free string value in tokens
     for (int i = 0; i < tokenAmount; i++)
@@ -204,7 +228,7 @@ void FillTokenArray(Token* tokens, char* json)
             char* value = malloc(stringSize+1);
             for (int j = 0; j < stringSize+1; j++) value[j] = '\0';
             value[numIndex++] = json[i];
-            while (json[i + 1] != '\0' && strchr("1234567890.", json[i + 1]) != NULL)
+            while (json[i+1] != '\0' && strchr("1234567890.", json[i+1]) != NULL)
             {
                 i++;
                 value[numIndex++] = json[i];
@@ -219,7 +243,7 @@ void FillTokenArray(Token* tokens, char* json)
         else if (json[i] == '\"')
         {
             i++;
-            int j = i;
+            int j = i; 
             while (json[j] != '\"') j++;
             int stringSize = j-i;
 
@@ -351,4 +375,29 @@ Token* RemoveRedundantTokens(Token* tokens, int tokenAmount, int newTokenAmount)
     }
 
     return newTokenArray;
+}
+
+int GetTokenPairAmount(Token* tokens, int tokenAmount)
+{
+    int pairAmount = 0;
+    for (int i = 0; i < tokenAmount; i++)
+        if (tokens[i].Type == COLON)
+            pairAmount++;
+    
+    return pairAmount;
+}
+
+Pair* GetTokenPairs(Token* tokens, int tokenAmount, int pairAmount)
+{
+    Pair* jsonPairs = malloc(pairAmount * sizeof(Pair));
+
+    int index = 0;
+    for (int i = 0; i < tokenAmount; i++)
+        if (tokens[i].Type == COLON)
+            jsonPairs[index++] = (Pair){
+                .Key = &tokens[i-1],
+                .Value = &tokens[i+1]
+            };
+    
+    return jsonPairs;
 }
