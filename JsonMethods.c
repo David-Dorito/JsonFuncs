@@ -52,13 +52,12 @@ typedef struct {
 } Pair;
 
 static char* StringWithoutWhitespace(const char* string, int len);
-static int GetTokenAmount(char* json);
+static i32 GetTokenAmount(char* json);
 static u8 FillTokenArray(Token* pTokens, char* json);
-static int GetRequiredTokenAmount(Token* pTokens, int tokenAmount);
-static void RemoveRedundantTokens(Token* pTokens, int tokenAmount);
-static int GetTokenPairAmount(Token* pTokens, int tokenAmount);
-static Pair* GetTokenPairs(Token* pTokens, int tokenAmount, int pairAmount);
-static void AssignValues(JsonField* pFields, int fieldAmount, Pair* pTokenPairs, int pairAmount);
+static void RemoveRedundantTokens(Token* pTokens, u32 tokenAmount);
+static u32 GetTokenPairAmount(Token* pTokens, u32 tokenAmount);
+static Pair* GetTokenPairs(Token* pTokens, u32 tokenAmount, u32 pairAmount);
+static void AssignValues(JsonField* pFields, int fieldAmount, Pair* pTokenPairs, u32 pairAmount);
 
 JsonMethodsError JsonMethods_Deserialize(char* rawJson, JsonField* pFields, int fieldAmount)
 {
@@ -67,7 +66,7 @@ JsonMethodsError JsonMethods_Deserialize(char* rawJson, JsonField* pFields, int 
 
     printf("%s\n", json);
 
-    int tokenAmount = GetTokenAmount(json);
+    u32 tokenAmount = GetTokenAmount(json);
     if (tokenAmount == -1) return JSONMETHODS_ERROR_INVALID_JSON;
 
     Token* pTokens = calloc(tokenAmount, sizeof(Token));
@@ -81,7 +80,7 @@ JsonMethodsError JsonMethods_Deserialize(char* rawJson, JsonField* pFields, int 
 
     //output tokens
     printf("token array\n[");
-    for (int i = 0; i < tokenAmount; i++)
+    for (u32 i = 0; i < tokenAmount; i++)
     {
         if (pTokens[i].Type == STRING) printf(" %s ", pTokens[i].Value.StringValue);
         else if (pTokens[i].Type == NUMBER) printf(" %f ", pTokens[i].Value.NumberValue);
@@ -96,7 +95,7 @@ JsonMethodsError JsonMethods_Deserialize(char* rawJson, JsonField* pFields, int 
 
     printf("new token array\n[");
     //output tokens
-    for (int i = 0; i < tokenAmount; i++)
+    for (u32 i = 0; i < tokenAmount; i++)
     {
         if (pTokens[i].Type == STRING) printf(" %s ", pTokens[i].Value.StringValue);
         else if (pTokens[i].Type == NUMBER) printf(" %f ", pTokens[i].Value.NumberValue);
@@ -107,7 +106,7 @@ JsonMethodsError JsonMethods_Deserialize(char* rawJson, JsonField* pFields, int 
     }
     printf("]\n");
 
-    int tokenPairAmount = GetTokenPairAmount(pTokens, tokenAmount);
+    u32 tokenPairAmount = GetTokenPairAmount(pTokens, tokenAmount);
     Pair* pTokenPairs = GetTokenPairs(pTokens, tokenAmount, tokenPairAmount);
     if (pTokenPairs == NULL)
     {
@@ -118,7 +117,7 @@ JsonMethodsError JsonMethods_Deserialize(char* rawJson, JsonField* pFields, int 
 
     printf("pair array\n");
     //output pairs
-    for (int i = 0; i < tokenPairAmount; i++)
+    for (u32 i = 0; i < tokenPairAmount; i++)
     {
         printf("[ %s : ", pTokenPairs[i].Key->Value.StringValue);
         if (pTokenPairs[i].Value->Type == STRING) printf(" %s ]", pTokenPairs[i].Value->Value.StringValue);
@@ -133,7 +132,7 @@ JsonMethodsError JsonMethods_Deserialize(char* rawJson, JsonField* pFields, int 
     AssignValues(pFields, fieldAmount, pTokenPairs, tokenPairAmount);
 
     //free unneeded memory
-    for (int i = 0; i < tokenAmount; i++)
+    for (u32 i = 0; i < tokenAmount; i++)
         if (pTokens[i].Type == STRING || pTokens[i].Type == ARRAY) free(pTokens[i].Value.StringValue);
     free(pTokenPairs);
     free(pTokens);
@@ -147,18 +146,31 @@ void JsonMethods_Serialize()
     
 }
 
+/*************************************\
+ * fn: @StringWithoutWhitespace 
+ * 
+ * param1: const char*: string to remove whitespace from
+ * param2: int: length of the string
+ * 
+ * return char*: pointer to the start of the string without whitespace
+ * 
+ * desc: removes all whitespace from a string
+ * 
+ * note: allocates new memory for the new string, remember to free it after use
+ * 
+\**************************************/
 static char* StringWithoutWhitespace(const char* string, int len)
 {
-    int newStringSize = 0;
-    for (int i = 0; i < len; i++)
+    u32 newStringSize = 0;
+    for (u32 i = 0; i < len; i++)
         if (!isspace((unsigned char)string[i]))
             newStringSize++;
 
     char* newArray = malloc((newStringSize + 1) * sizeof(char));
     if (newArray == NULL) return NULL;
 
-    int OriginalArrayOffset = 0;
-    for (int i = 0; i-OriginalArrayOffset < newStringSize; i++)
+    u32 OriginalArrayOffset = 0;
+    for (u32 i = 0; i-OriginalArrayOffset < newStringSize; i++)
         if (!isspace((unsigned char)string[i])) newArray[i-OriginalArrayOffset] = string[i];
         else OriginalArrayOffset++;
     newArray[newStringSize] = '\0';
@@ -166,12 +178,24 @@ static char* StringWithoutWhitespace(const char* string, int len)
     return newArray;
 }
 
-static int GetTokenAmount(char* json)
+/*************************************\
+ * fn: @GetTokenAmount 
+ * 
+ * param1: const char*: string to remove whitespace from
+ * 
+ * return i32: pointer to the start of the string without whitespace
+ * 
+ * desc: removes all whitespace from a string
+ * 
+ * note: allocates new memory for the new string, remember to free it after use
+ * 
+\**************************************/
+static i32 GetTokenAmount(char* json)
 {
-    int tokenAmount = 0;
-    int len = strlen(json);
+    u32 tokenAmount = 0;
+    u32 len = strlen(json);
     
-    for (int i = 0; i < len; i++)
+    for (u32 i = 0; i < len; i++)
     {
         if (strchr("1234567890.", json[i]) != NULL)
         {
@@ -190,12 +214,12 @@ static int GetTokenAmount(char* json)
         }
         else if (isalpha(json[i]))
         {
-            const int start = i;
+            const u32 start = i;
             while (isalpha(json[i])) i++;
-            const int len = i - start;
+            const u32 len = i - start;
 
             char buffer[8];
-            if (len >= (int)sizeof(buffer)) return -1;
+            if (len >= (int)sizeof(buffer)) return -1; //invalid json
             memcpy(buffer, &json[start], len);
             buffer[len] = '\0';
 
@@ -221,21 +245,34 @@ static int GetTokenAmount(char* json)
     return tokenAmount;
 }
 
+/*************************************\
+ * fn: @FillTokenArray 
+ * 
+ * param1: Token*: array of tokens to fill
+ * param2: char*: string to parse tokens from
+ * 
+ * return u8: error code
+ * 
+ * desc: fills an array of tokens from a json string
+ * 
+ * note: allocates memory for string and array tokens, remember to free them after use
+ * 
+\**************************************/
 static u8 FillTokenArray(Token* pTokens, char* json)
 {
-    int nextTokenIndex = 0;
-    for (int i = 0; i < strlen(json); i++)
+    u32 nextTokenIndex = 0;
+    for (u32 i = 0; i < strlen(json); i++)
     {
         if (strchr("1234567890.", json[i]) != NULL)
         {
-            int j = i;
+            u32 j = i;
             while (json[j] != '\0' && strchr("1234567890.", json[j]) != NULL) j++;
-            int stringSize = (j-i)+1;
+            u32 stringSize = (j-i)+1;
 
-            int numIndex = 0;
+            u32 numIndex = 0;
             char* value = malloc(stringSize);
             if (value == NULL) return 1;
-            for (int j = 0; j < stringSize; j++) value[j] = '\0';
+            for (u32 j = 0; j < stringSize; j++) value[j] = '\0';
             value[numIndex++] = json[i];
             while (json[i+1] != '\0' && strchr("1234567890.", json[i+1]) != NULL)
             {
@@ -252,15 +289,15 @@ static u8 FillTokenArray(Token* pTokens, char* json)
         else if (json[i] == '\"')
         {
             i++;
-            int j = i; 
+            u32 j = i; 
             while (json[j] != '\"') j++;
-            int stringSize = (j-i)+1;
+            u32 stringSize = (j-i)+1;
 
             char* value = malloc(stringSize);
             if (value == NULL) return 1;
-            for (int l = 0; l < stringSize; l++) value[l] = '\0';
+            for (u32 l = 0; l < stringSize; l++) value[l] = '\0';
             
-            int index = 0;
+            u32 index = 0;
             while (json[i] != '\"') value[index++] = json[i++];
             
             pTokens[nextTokenIndex++] = (Token){
@@ -270,15 +307,14 @@ static u8 FillTokenArray(Token* pTokens, char* json)
         }
         else if (json[i] == '[')
         {
-            int start = i;
-            int j = i;
+            u32 j = i;
             while (json[j] != ']' && json[j] != '\0') j++;
             if (json[j] == '\0') return 1; // invalid json
-            int len = j - start + 1; // include closing bracket
+            u32 len = (j - i) + 1; // include closing bracket
 
             char* arrayString = malloc(len + 1);
             if (arrayString == NULL) return 1;
-            memcpy(arrayString, &json[start], len);
+            memcpy(arrayString, &json[i], len);
             arrayString[len] = '\0';
             i = j; // advance to closing bracket
 
@@ -305,9 +341,9 @@ static u8 FillTokenArray(Token* pTokens, char* json)
         }
         else if (isalpha(json[i]))
         {
-            const int start = i;
+            const u32 start = i;
             while (isalpha(json[i])) i++;
-            const int len = i - start;
+            const u32 len = i - start;
 
             char buffer[8];
             memcpy(buffer, &json[start], len);
@@ -332,35 +368,75 @@ static u8 FillTokenArray(Token* pTokens, char* json)
     return 0;
 }
 
-static void RemoveRedundantTokens(Token* pTokens, int tokenAmount)
+/*************************************\
+ * fn: @RemoveRedundantTokens 
+ * 
+ * param1: Token*: array of tokens to process
+ * param2: u32: amount of tokens in the array
+ * 
+ * return:
+ * 
+ * desc: sets redundant tokens (braces) to DELETED type, so they can be ignored later
+ * 
+ * note: the memory isnt cleared, just marked as DELETED
+ * 
+\**************************************/
+static void RemoveRedundantTokens(Token* pTokens, u32 tokenAmount)
 {
-    for (int i = 0; i < tokenAmount; i++)
+    for (u32 i = 0; i < tokenAmount; i++)
         if (pTokens[i].Type == LEFT_BRACE)
             if (i > 1 && pTokens[i-1].Type == COLON)
-                for (int k = i - 2; k <= i; k++)
+                for (u32 k = i - 2; k <= i; k++)
                     pTokens[k].Type = DELETED;
             else pTokens[i].Type = DELETED;
         else if (pTokens[i].Type == RIGHT_BRACE)
             pTokens[i].Type = DELETED;
 }
 
-static int GetTokenPairAmount(Token* pTokens, int tokenAmount)
+/*************************************\
+ * fn: @GetTokenPairAmount 
+ * 
+ * param1: Token*: array of tokens to process
+ * param2: u32: amount of tokens in the array
+ * 
+ * return u32: amount of key-value pairs found
+ * 
+ * desc: counts the amount of key-value pairs in the token array
+ * 
+ * note:
+ * 
+\**************************************/
+static u32 GetTokenPairAmount(Token* pTokens, u32 tokenAmount)
 {
-    int pairAmount = 0;
-    for (int i = 0; i < tokenAmount; i++)
+    u32 pairAmount = 0;
+    for (u32 i = 0; i < tokenAmount; i++)
         if (pTokens[i].Type == COLON && i > 0 && pTokens[i-1].Type == STRING)
             pairAmount++;
     
     return pairAmount;
 }
 
-static Pair* GetTokenPairs(Token* pTokens, int tokenAmount, int pairAmount)
+/*************************************\
+ * fn: @GetTokenPairs 
+ * 
+ * param1: Token*: array of tokens to process
+ * param2: u32: amount of tokens in the array
+ * param3: u32: amount of key-value pairs expected
+ * 
+ * return Pair*: pointer to an array of pairs
+ * 
+ * desc: creates an array of key-value pairs from the token array
+ * 
+ * note: allocates memory for the array, remember to free it after use
+ * 
+\**************************************/
+static Pair* GetTokenPairs(Token* pTokens, u32 tokenAmount, u32 pairAmount)
 {
     Pair* pJsonPairs = malloc(pairAmount * sizeof(Pair));
     if (pJsonPairs == NULL) return NULL;
 
-    int index = 0;
-    for (int i = 0; i < tokenAmount; i++)
+    u32 index = 0;
+    for (u32 i = 0; i < tokenAmount; i++)
         if (pTokens[i].Type == COLON)
             if (i > 0 && pTokens[i-1].Type == STRING && i+1 < tokenAmount && pTokens[i+1].Type != DELETED)
                 if (index < pairAmount)
@@ -372,11 +448,26 @@ static Pair* GetTokenPairs(Token* pTokens, int tokenAmount, int pairAmount)
     return pJsonPairs;
 }
 
-static void AssignValues(JsonField* pFields, int fieldAmount, Pair* pTokenPairs, int pairAmount)
+/*************************************\
+ * fn: @AssignValues
+ * 
+ * param1: JsonField*: array of fields to assign values to given by the API caller
+ * param2: u32: amount of fields given by the API caller
+ * param3: Pair*: array of key-value pairs
+ * param4: u32: amount of key-value pairs expected
+ * 
+ * return:
+ * 
+ * desc: assigns values from the key-value pairs to the corresponding fields by matching key names
+ * 
+ * note: does not support arrays yet
+ * 
+\**************************************/
+static void AssignValues(JsonField* pFields, int fieldAmount, Pair* pTokenPairs, u32 pairAmount)
 {
-    for (int i = 0; i < fieldAmount; i++)
+    for (u32 i = 0; i < fieldAmount; i++)
     {
-        for (int j = 0; j < pairAmount; j++)
+        for (u32 j = 0; j < pairAmount; j++)
         {
             if (strcmp(pFields[i].KeyName, pTokenPairs[j].Key->Value.StringValue)) continue;
 
