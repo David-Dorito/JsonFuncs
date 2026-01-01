@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include "JsonMethods.h"
 
 typedef struct {
     char* Username;
     double Level;
+    uint8_t IsActive;
 } Player;
 
 char* FileToString(const char* filename);
@@ -21,7 +23,7 @@ int main(void)
 
     Player player;
 
-    JsonField pFields[] = { 
+    JsonField pFields[] = {
         (JsonField){
             .KeyName = "Username",
             .Destination = &player.Username
@@ -29,13 +31,24 @@ int main(void)
         (JsonField){
             .KeyName = "Level",
             .Destination = &player.Level
+        },
+        (JsonField){
+            .KeyName = "bool",
+            .Destination = &player.IsActive
         }
     };
 
-    JsonMethods_Deserialize(fileContents, pFields, 2);
+    if (JsonMethods_Deserialize(fileContents, pFields, 2) != JSONMETHODS_ERROR_NONE) {
+        printf("Failed to deserialize JSON.\n");
+        free(fileContents);
+        return 1;
+    }
 
+    printf("player username: %s\n", player.Username);
     printf("player level: %f\n", player.Level);
+    printf("player IsActive: %d\n", player.IsActive);
 
+    free(player.Username);
     free(fileContents);
 
     return 0;

@@ -7,7 +7,14 @@ typedef struct {
     size_t Size;
 } JsonField;
 
-void JsonMethods_Deserialize(char* RawJson, JsonField* pFields, int fieldAmount);
+typedef enum {
+    JSONMETHODS_ERROR_NONE = 0,
+    JSONMETHODS_ERROR_INVALID_JSON,
+    JSONMETHODS_ERROR_MALLOC_FAILED,
+    JSONMETHODS_ERROR_UNKNOWN
+} JsonMethodsError;
+
+JsonMethodsError JsonMethods_Deserialize(char* RawJson, JsonField* pFields, int fieldAmount);
 void JsonMethods_Serialize();
 
 #endif
