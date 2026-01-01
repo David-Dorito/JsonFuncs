@@ -26,19 +26,22 @@ int main(void)
     JsonField pFields[] = {
         (JsonField){
             .KeyName = "Username",
-            .Destination = &player.Username
+            .Destination = &player.Username,
+            .Size = sizeof(player.Username)
         },
         (JsonField){
             .KeyName = "Level",
-            .Destination = &player.Level
+            .Destination = &player.Level,
+            .Size = sizeof(player.Level)
         },
         (JsonField){
             .KeyName = "bool",
-            .Destination = &player.IsActive
+            .Destination = &player.IsActive,
+            .Size = sizeof(player.IsActive)
         }
     };
 
-    if (JsonMethods_Deserialize(fileContents, pFields, 2) != JSONMETHODS_ERROR_NONE) {
+    if (JsonMethods_Deserialize(fileContents, pFields, sizeof(pFields)/sizeof(pFields[0])) != JSONMETHODS_ERROR_NONE) {
         printf("Failed to deserialize JSON.\n");
         free(fileContents);
         return 1;

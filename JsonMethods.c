@@ -32,7 +32,8 @@ typedef enum {
     NUMBER,
     BOOL,
     NULLVALUE,
-    ARRAY
+    ARRAY,
+    DELETED
 } TokenType;
 
 typedef struct {
@@ -53,8 +54,8 @@ typedef struct {
 static char* StringWithoutWhitespace(const char* string, int len);
 static int GetTokenAmount(char* json);
 static u8 FillTokenArray(Token* pTokens, char* json);
-static Token* RemoveRedundantTokens(Token* pTokens, int tokenAmount, int newTokenAmount);
 static int GetRequiredTokenAmount(Token* pTokens, int tokenAmount);
+static void RemoveRedundantTokens(Token* pTokens, int tokenAmount);
 static int GetTokenPairAmount(Token* pTokens, int tokenAmount);
 static Pair* GetTokenPairs(Token* pTokens, int tokenAmount, int pairAmount);
 static void AssignValues(JsonField* pFields, int fieldAmount, Pair* pTokenPairs, int pairAmount);
@@ -91,36 +92,28 @@ JsonMethodsError JsonMethods_Deserialize(char* rawJson, JsonField* pFields, int 
     }
     printf("]\n");
 
-    int requiredTokenAmount = GetRequiredTokenAmount(pTokens, tokenAmount);
-    Token* pRequiredTokens = RemoveRedundantTokens(pTokens, tokenAmount, requiredTokenAmount);
-    if (pRequiredTokens == NULL)
-    {
-        free(pTokens);
-        free(json);
-        return JSONMETHODS_ERROR_MALLOC_FAILED;
-    }
+    RemoveRedundantTokens(pTokens, tokenAmount);
 
     printf("new token array\n[");
     //output tokens
-    for (int i = 0; i < requiredTokenAmount; i++)
+    for (int i = 0; i < tokenAmount; i++)
     {
-        if (pRequiredTokens[i].Type == STRING) printf(" %s ", pRequiredTokens[i].Value.StringValue);
-        else if (pRequiredTokens[i].Type == NUMBER) printf(" %f ", pRequiredTokens[i].Value.NumberValue);
-        else if (pRequiredTokens[i].Type == NULLVALUE) printf(" NULL ");
-        else if (pRequiredTokens[i].Type == BOOL) printf(" %d ", pRequiredTokens[i].Value.BoolValue);
-        else if (pRequiredTokens[i].Type == ARRAY) printf(" %s ", pRequiredTokens[i].Value.StringValue);
-        else printf(" %c ", pRequiredTokens[i].Value.CharValue);
+        if (pTokens[i].Type == STRING) printf(" %s ", pTokens[i].Value.StringValue);
+        else if (pTokens[i].Type == NUMBER) printf(" %f ", pTokens[i].Value.NumberValue);
+        else if (pTokens[i].Type == NULLVALUE) printf(" NULL ");
+        else if (pTokens[i].Type == BOOL) printf(" %d ", pTokens[i].Value.BoolValue);
+        else if (pTokens[i].Type == ARRAY) printf(" %s ", pTokens[i].Value.StringValue);
+        else printf(" %c ", pTokens[i].Value.CharValue);
     }
     printf("]\n");
 
-    int tokenPairAmount = GetTokenPairAmount(pRequiredTokens, requiredTokenAmount);
-    Pair* pTokenPairs = GetTokenPairs(pRequiredTokens, requiredTokenAmount, tokenPairAmount);
+    int tokenPairAmount = GetTokenPairAmount(pTokens, tokenAmount);
+    Pair* pTokenPairs = GetTokenPairs(pTokens, tokenAmount, tokenPairAmount);
     if (pTokenPairs == NULL)
     {
-        free(pRequiredTokens);
         free(pTokens);
         free(json);
-        return JSONMETHODS_ERROR_MALLOC_FAILED;
+        return JSONMETHODS_ERROR_MALLOC_FAILED;   
     }
 
     printf("pair array\n");
@@ -143,7 +136,6 @@ JsonMethodsError JsonMethods_Deserialize(char* rawJson, JsonField* pFields, int 
     for (int i = 0; i < tokenAmount; i++)
         if (pTokens[i].Type == STRING || pTokens[i].Type == ARRAY) free(pTokens[i].Value.StringValue);
     free(pTokenPairs);
-    free(pRequiredTokens);
     free(pTokens);
     free(json);
 
@@ -162,7 +154,7 @@ static char* StringWithoutWhitespace(const char* string, int len)
         if (!isspace((unsigned char)string[i]))
             newStringSize++;
 
-    char* newArray = malloc(newStringSize * sizeof(char));
+    char* newArray = malloc((newStringSize + 1) * sizeof(char));
     if (newArray == NULL) return NULL;
 
     int OriginalArrayOffset = 0;
@@ -203,6 +195,7 @@ static int GetTokenAmount(char* json)
             const int len = i - start;
 
             char buffer[8];
+            if (len >= (int)sizeof(buffer)) return -1;
             memcpy(buffer, &json[start], len);
             buffer[len] = '\0';
 
@@ -278,14 +271,17 @@ static u8 FillTokenArray(Token* pTokens, char* json)
         else if (json[i] == '[')
         {
             int start = i;
-            int len = json[i+1] != ']'; //start at 1 if array isnt empty
-            while (json[++i] != ']') len++;
+            int j = i;
+            while (json[j] != ']' && json[j] != '\0') j++;
+            if (json[j] == '\0') return 1; // invalid json
+            int len = j - start + 1; // include closing bracket
 
             char* arrayString = malloc(len + 1);
             if (arrayString == NULL) return 1;
-            memcpy(arrayString, &json[start], len + 1);
-            arrayString[len] == '\0';
-            
+            memcpy(arrayString, &json[start], len);
+            arrayString[len] = '\0';
+            i = j; // advance to closing bracket
+
             pTokens[nextTokenIndex++] = (Token){
                 .Type = ARRAY,
                 .Value.StringValue = arrayString
@@ -336,72 +332,23 @@ static u8 FillTokenArray(Token* pTokens, char* json)
     return 0;
 }
 
-static int GetRequiredTokenAmount(Token* pTokens, int tokenAmount)
+static void RemoveRedundantTokens(Token* pTokens, int tokenAmount)
 {
-    int newTokenAmount = tokenAmount;
     for (int i = 0; i < tokenAmount; i++)
-    {
         if (pTokens[i].Type == LEFT_BRACE)
-        {
-            newTokenAmount--;
-            if (i > 1 && pTokens[i-1].Type == COLON) newTokenAmount-=2;
-        }
-        else if (pTokens[i].Type == RIGHT_BRACE) newTokenAmount--;
-    }
-    return newTokenAmount;
-}
-
-static Token* RemoveRedundantTokens(Token* pTokens, int tokenAmount, int newTokenAmount)
-{
-    int invalidIndexes[tokenAmount];
-    for (int i = 0; i < tokenAmount; i++)
-    {
-        if (pTokens[i].Type == LEFT_BRACE)
-        {
-            invalidIndexes[i] = 1;
             if (i > 1 && pTokens[i-1].Type == COLON)
-            {
-                invalidIndexes[i-1] = 1;
-                invalidIndexes[i-2] = 1;
-            }
-        }
-        else if (pTokens[i].Type == RIGHT_BRACE) invalidIndexes[i] = 1;
-        else invalidIndexes[i] = 0;
-    }
-
-    Token* newTokenArray = calloc(newTokenAmount, sizeof(Token));
-    if (newTokenArray == NULL) return NULL;
-
-    int index = 0;
-    for (int i = 0; i < tokenAmount; i++)
-    {
-        if (!invalidIndexes[i])
-        {
-            Token newToken = {
-                .Type = pTokens[i].Type
-            };
-
-            switch (pTokens[i].Type)
-            {
-                case STRING: newToken.Value.StringValue = pTokens[i].Value.StringValue; break;
-                case NUMBER: newToken.Value.NumberValue = pTokens[i].Value.NumberValue; break;
-                case BOOL: newToken.Value.BoolValue = pTokens[i].Value.BoolValue; break;
-                case ARRAY: newToken.Value.StringValue = pTokens[i].Value.StringValue; break;
-                default: newToken.Value.CharValue = pTokens[i].Value.CharValue; break;
-            }
-
-            newTokenArray[index++] = newToken;
-        }
-    }
-
-    return newTokenArray;
+                for (int k = i - 2; k <= i; k++)
+                    pTokens[k].Type = DELETED;
+            else pTokens[i].Type = DELETED;
+        else if (pTokens[i].Type == RIGHT_BRACE)
+            pTokens[i].Type = DELETED;
 }
 
 static int GetTokenPairAmount(Token* pTokens, int tokenAmount)
 {
     int pairAmount = 0;
     for (int i = 0; i < tokenAmount; i++)
-        if (pTokens[i].Type == COLON)
+        if (pTokens[i].Type == COLON && i > 0 && pTokens[i-1].Type == STRING)
             pairAmount++;
     
     return pairAmount;
@@ -415,10 +362,12 @@ static Pair* GetTokenPairs(Token* pTokens, int tokenAmount, int pairAmount)
     int index = 0;
     for (int i = 0; i < tokenAmount; i++)
         if (pTokens[i].Type == COLON)
-            pJsonPairs[index++] = (Pair){
-                .Key = &pTokens[i-1],
-                .Value = &pTokens[i+1]
-            };
+            if (i > 0 && pTokens[i-1].Type == STRING && i+1 < tokenAmount && pTokens[i+1].Type != DELETED)
+                if (index < pairAmount)
+                    pJsonPairs[index++] = (Pair){
+                        .Key = &pTokens[i-1],
+                        .Value = &pTokens[i+1]
+                    };
     
     return pJsonPairs;
 }
