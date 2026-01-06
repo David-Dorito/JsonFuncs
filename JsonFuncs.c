@@ -3,7 +3,6 @@ TODO:
 1. add array support
 2. add int support (currently double)
 3. fix memory leak on error in BuildTree method
- 
 \*********/
 
 #include <stdlib.h>
@@ -58,14 +57,25 @@ struct Node {
 
 static char* StringWithoutWhitespace(const char* string, u32 len);
 static i32 GetTokenAmount(char* json);
-static JsonFuncsReturn FillTokenArray(Token* pTokens, u16 tokenAmount, char* json);
-static JsonFuncsReturn AssignValues(JsonField* pFields, int fieldAmount, Node* pRootNode);
-static JsonFuncsReturn BuildTree(Token* pTokens, u16 start, u16 end, Node* pParentNode);
+static JsonFuncs_Return FillTokenArray(Token* pTokens, u16 tokenAmount, char* json);
+static JsonFuncs_Return AssignValues(JsonField* pFields, int fieldAmount, Node* pRootNode);
+static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pParentNode);
 static char* fgetsFromString(char* destination, u32 len, const char** source, char splittingCharacter);
+static JsonFuncs_Return FileToString(const char* fileName, char** out);
 
-JsonFuncsReturn JsonFuncs_Deserialize(char* rawJson, JsonField* pFields, int fieldAmount)
+JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* pFields, int fieldAmount, JsonFuncs_InputType FileOrString)
 {
-    char* json = StringWithoutWhitespace(rawJson, strlen(rawJson));
+    char* json;
+    if (FileOrString == JSONFUNCS_INPUT_JSONFILE)
+    {
+        char* fileContents;
+        JsonFuncs_Return errorCode = FileToString(rawJson, &fileContents);
+        if (errorCode) return errorCode;
+        json = StringWithoutWhitespace(fileContents, strlen(fileContents));
+        free(fileContents);
+    }
+    else json = StringWithoutWhitespace(rawJson, strlen(rawJson));
+    
     if (json == NULL) return JSONFUNCS_ERROR_MALLOC_FAILED;
 
     i32 tokenAmount = GetTokenAmount(json);
@@ -235,7 +245,7 @@ static i32 GetTokenAmount(char* json)
  * note: allocates memory for string and array tokens, remember to free them after use
  * 
 \**************************************/
-static JsonFuncsReturn FillTokenArray(Token* pTokens, u16 tokenAmount, char* json)
+static JsonFuncs_Return FillTokenArray(Token* pTokens, u16 tokenAmount, char* json)
 {
     u32 nextTokenIndex = 0;
     for (u32 i = 0; i < strlen(json); i++)
@@ -367,7 +377,7 @@ static JsonFuncsReturn FillTokenArray(Token* pTokens, u16 tokenAmount, char* jso
  * note: does not support arrays yet
  * 
 \**************************************/
-static JsonFuncsReturn AssignValues(JsonField* pFields, int fieldAmount, Node* pRootNode)
+static JsonFuncs_Return AssignValues(JsonField* pFields, int fieldAmount, Node* pRootNode)
 {
     u8 result = JSONFUNCS_OK;
     for (u16 i = 0; i < fieldAmount; i++)
@@ -394,21 +404,17 @@ static JsonFuncsReturn AssignValues(JsonField* pFields, int fieldAmount, Node* p
         {
             case NUMBER: 
                 *((double*)pFields[i].Destination) = pCurrentNode->ppChildNodes[0]->pToken->Value.NumberValue;
-                printf("test2\n");
                 break;
             case BOOL:
-                printf("test\n");
                 *((u8*)pFields[i].Destination) = pCurrentNode->ppChildNodes[0]->pToken->Value.BoolValue;
                 break;
             case STRING: 
                 char* copy = malloc(strlen(pCurrentNode->ppChildNodes[0]->pToken->Value.StringValue) + 1);
                 strcpy(copy, pCurrentNode->ppChildNodes[0]->pToken->Value.StringValue);
                 *((char**)pFields[i].Destination) = copy;
-                printf("test3\n");
                 break;
             case NULLVALUE:
                 memset(pFields[i].Destination, 0, pFields[i].Size);
-                printf("test4\n");
                 break;
         }
     }
@@ -463,7 +469,7 @@ static char* fgetsFromString(char* destination, u32 len, const char** source, ch
  * note: allocates heap memory
  * 
 \**************************************/
-static JsonFuncsReturn BuildTree(Token* pTokens, u16 start, u16 end, Node* pParentNode)
+static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pParentNode)
 {
     u8 result = JSONFUNCS_OK;
     u16 searchDepth = pParentNode->pToken->Depth + 1;
@@ -569,4 +575,44 @@ static JsonFuncsReturn BuildTree(Token* pTokens, u16 start, u16 end, Node* pPare
         pParentNode->ChildCount = 0;
 
         return result;
+}
+
+/*************************************\
+ * fn: @FileToString
+ * 
+ * param1: const char*: the path of the file
+ * param2: char**: place to save string to
+ * 
+ * return JsonFuncsError: error code
+ * 
+ * desc: gets all contents of a file at given path, allocates memory and sets its pointer to the out param
+ * 
+ * note: allocates heap memory
+ * 
+\**************************************/
+static JsonFuncs_Return FileToString(const char* fileName, char** out)
+{
+    FILE* file = fopen(fileName, "rb");
+    if (!file) return JSONFUNCS_ERROR_INVALID_PATH;
+
+    // move to end to determine file size
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    rewind(file);
+
+    // allocate buffer
+    char* buffer = malloc(size + 1);
+    if (!buffer)
+    {
+        fclose(file);
+        return JSONFUNCS_ERROR_MALLOC_FAILED;
+    }
+
+    // read file
+    fread(buffer, 1, size, file);
+    buffer[size] = '\0'; // null-terminate
+
+    fclose(file);
+    *out = buffer;
+    return JSONFUNCS_OK;
 }

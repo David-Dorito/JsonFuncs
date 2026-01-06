@@ -40,7 +40,7 @@ int main(void)
         }
     };
 
-    if (JsonFuncs_Deserialize(fileContents, pFields, sizeof(pFields)/sizeof(pFields[0])) != JSONFUNCS_OK) {
+    if (JsonFuncs_Deserialize(fileContents, pFields, sizeof(pFields)/sizeof(pFields[0]), JSONFUNCS_INPUT_JSONSTRING) != JSONFUNCS_OK) {
         printf("Failed to deserialize JSON\n");
         free(fileContents);
         return 1;
