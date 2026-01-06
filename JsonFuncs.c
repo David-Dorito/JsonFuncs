@@ -2,8 +2,7 @@
 TODO:
 1. add array support
 2. add int support (currently double)
-3. fix bools
-4. fix memory leak on error in BuildTree method
+3. fix memory leak on error in BuildTree method
  
 \*********/
 
@@ -59,7 +58,7 @@ struct Node {
 
 static char* StringWithoutWhitespace(const char* string, u32 len);
 static i32 GetTokenAmount(char* json);
-static u8 FillTokenArray(Token* pTokens, u16 tokenAmount, char* json);
+static JsonFuncsReturn FillTokenArray(Token* pTokens, u16 tokenAmount, char* json);
 static JsonFuncsReturn AssignValues(JsonField* pFields, int fieldAmount, Node* pRootNode);
 static JsonFuncsReturn BuildTree(Token* pTokens, u16 start, u16 end, Node* pParentNode);
 static char* fgetsFromString(char* destination, u32 len, const char** source, char splittingCharacter);
@@ -236,7 +235,7 @@ static i32 GetTokenAmount(char* json)
  * note: allocates memory for string and array tokens, remember to free them after use
  * 
 \**************************************/
-static u8 FillTokenArray(Token* pTokens, u16 tokenAmount, char* json)
+static JsonFuncsReturn FillTokenArray(Token* pTokens, u16 tokenAmount, char* json)
 {
     u32 nextTokenIndex = 0;
     for (u32 i = 0; i < strlen(json); i++)
@@ -378,8 +377,12 @@ static JsonFuncsReturn AssignValues(JsonField* pFields, int fieldAmount, Node* p
         Node* pCurrentNode = pRootNode;
         while (fgetsFromString(stringBuffer, BUFFER_SIZE, &stringPointer, '.'))
             for (u16 j = 0; j < pCurrentNode->ChildCount; j++)
-                if (!strcmp(pCurrentNode->ppChildNodes[j]->pToken->Value.StringValue, stringBuffer))
+            {
+                u8 isKeynameEqual = !strcmp(pCurrentNode->ppChildNodes[j]->pToken->Value.StringValue, stringBuffer);
+                if (isKeynameEqual)
                     pCurrentNode = pCurrentNode->ppChildNodes[j];
+            }
+                
 
         if (pCurrentNode->ChildCount != 1 || pCurrentNode->ppChildNodes[0]->ChildCount != 0)
         {
@@ -388,23 +391,26 @@ static JsonFuncsReturn AssignValues(JsonField* pFields, int fieldAmount, Node* p
         }
 
         switch (pCurrentNode->ppChildNodes[0]->pToken->Type)
-            {
-                case NUMBER: 
-                    *((double*)pFields[i].Destination) = pCurrentNode->ppChildNodes[0]->pToken->Value.NumberValue;
-                    break;
-                case BOOL:
-                    *((u8*)pFields[i].Destination) = pCurrentNode->ppChildNodes[0]->pToken->Value.BoolValue;
-                    break;
-                case STRING: 
-                    char* copy = malloc(strlen(pCurrentNode->ppChildNodes[0]->pToken->Value.StringValue) + 1);
-                    strcpy(copy, pCurrentNode->ppChildNodes[0]->pToken->Value.StringValue);
-                    *((char**)pFields[i].Destination) = copy;
-                    break;
-                case NULLVALUE:
-                    memset(pFields[i].Destination, 0, pFields[i].Size);
-                    break;
-            }
-            break;
+        {
+            case NUMBER: 
+                *((double*)pFields[i].Destination) = pCurrentNode->ppChildNodes[0]->pToken->Value.NumberValue;
+                printf("test2\n");
+                break;
+            case BOOL:
+                printf("test\n");
+                *((u8*)pFields[i].Destination) = pCurrentNode->ppChildNodes[0]->pToken->Value.BoolValue;
+                break;
+            case STRING: 
+                char* copy = malloc(strlen(pCurrentNode->ppChildNodes[0]->pToken->Value.StringValue) + 1);
+                strcpy(copy, pCurrentNode->ppChildNodes[0]->pToken->Value.StringValue);
+                *((char**)pFields[i].Destination) = copy;
+                printf("test3\n");
+                break;
+            case NULLVALUE:
+                memset(pFields[i].Destination, 0, pFields[i].Size);
+                printf("test4\n");
+                break;
+        }
     }
     return result;
 }

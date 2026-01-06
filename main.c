@@ -5,6 +5,7 @@
 #include "JsonFuncs.h"
 typedef struct {
     char* Username;
+    double Level;
     uint8_t IsActive;
 } Player;
 
@@ -31,6 +32,11 @@ int main(void)
             .KeyName = "Player.IsActive",
             .Destination = &player.IsActive,
             .Size = sizeof(player.IsActive)
+        },
+        (JsonField){
+            .KeyName = "Player.Level",
+            .Destination = &player.Level,
+            .Size = sizeof(player.Level)
         }
     };
 
@@ -42,6 +48,7 @@ int main(void)
 
     printf("player username: %s\n", player.Username);
     printf("player IsActive: %d\n", player.IsActive);
+    printf("player Level: %f\n", player.Level);
 
     free(player.Username);
     free(fileContents);
