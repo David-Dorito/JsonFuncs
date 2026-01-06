@@ -2,11 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include "JsonMethods.h"
-
+#include "JsonFuncs.h"
 typedef struct {
     char* Username;
-    double Level;
     uint8_t IsActive;
 } Player;
 
@@ -25,30 +23,24 @@ int main(void)
 
     JsonField pFields[] = {
         (JsonField){
-            .KeyName = "Username",
+            .KeyName = "Player.Username",
             .Destination = &player.Username,
             .Size = sizeof(player.Username)
         },
         (JsonField){
-            .KeyName = "Level",
-            .Destination = &player.Level,
-            .Size = sizeof(player.Level)
-        },
-        (JsonField){
-            .KeyName = "bool",
+            .KeyName = "Player.IsActive",
             .Destination = &player.IsActive,
             .Size = sizeof(player.IsActive)
         }
     };
 
-    if (JsonMethods_Deserialize(fileContents, pFields, sizeof(pFields)/sizeof(pFields[0])) != JSONMETHODS_ERROR_NONE) {
-        printf("Failed to deserialize JSON.\n");
+    if (JsonFuncs_Deserialize(fileContents, pFields, sizeof(pFields)/sizeof(pFields[0])) != JSONFUNCS_OK) {
+        printf("Failed to deserialize JSON\n");
         free(fileContents);
         return 1;
     }
 
     printf("player username: %s\n", player.Username);
-    printf("player level: %f\n", player.Level);
     printf("player IsActive: %d\n", player.IsActive);
 
     free(player.Username);

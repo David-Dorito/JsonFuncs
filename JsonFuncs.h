@@ -1,18 +1,20 @@
-#ifndef JSONMETHODS_H
-#define JSONMETHODS_H
+#ifndef JSONFUNCS_H
+#define JSONFUNCS_H
+
+#include <ctype.h>
 
 typedef struct {
-    char* KeyName;
+    const char* KeyName;
     void* Destination;
     size_t Size;
 } JsonField;
 
 typedef enum {
-    JSONMETHODS_ERROR_NONE = 0,
-    JSONMETHODS_ERROR_INVALID_JSON,
-    JSONMETHODS_ERROR_MALLOC_FAILED,
-    JSONMETHODS_ERROR_UNKNOWN
-} JsonMethodsError;
+    JSONFUNCS_OK = 0,
+    JSONFUNCS_ERROR_INVALID_JSON,
+    JSONFUNCS_ERROR_MALLOC_FAILED,
+    JSONFUNCS_ERROR_NESTED_VALUE
+} JsonFuncsReturn;
 
 /*************************************\
  * fn: @JsonMethods_Deserialize 
@@ -29,7 +31,7 @@ typedef enum {
  *       only basic types (int, float, bool, char*, etc) and bools are u8's
  * 
 \**************************************/
-JsonMethodsError JsonMethods_Deserialize(char* RawJson, JsonField* pFields, int fieldAmount);
+JsonFuncsReturn JsonFuncs_Deserialize(char* RawJson, JsonField* pFields, int fieldAmount);
 
 /*************************************\
  * fn: @JsonMethods_Serialize 
@@ -43,6 +45,6 @@ JsonMethodsError JsonMethods_Deserialize(char* RawJson, JsonField* pFields, int 
  * note:
  * 
 \**************************************/
-void JsonMethods_Serialize();
+void JsonFuncs_Serialize();
 
 #endif

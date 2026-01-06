@@ -1,2 +1,3 @@
 *.exe
 input.json
+.vscode
