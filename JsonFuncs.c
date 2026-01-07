@@ -1,8 +1,8 @@
 /*********\
-TODO:
-1. add array support
-2. add int support (currently double)
-3. fix memory leak on error in BuildTree method
+TODO: add array support
+TODO: add int support (currently double)
+FIXME: fix removing whitespace in strings in RemoveWhiteSpace func
+FIXME: make Deserialize more robust, sometimes it can even segfault with incorrect json
 \*********/
 
 #include <stdlib.h>
@@ -50,7 +50,8 @@ typedef struct {
 
 typedef struct Node Node;
 struct Node {
-    Node** ppChildNodes;
+    Node* pParentNode;
+    Node* pChildNodes;
     u16 ChildCount;
     Token* pToken;
 };
@@ -62,6 +63,8 @@ static JsonFuncs_Return AssignValues(JsonField* pFields, int fieldAmount, Node* 
 static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pParentNode);
 static char* fgetsFromString(char* destination, u32 len, const char** source, char splittingCharacter);
 static JsonFuncs_Return FileToString(const char* fileName, char** out);
+static void FreeTree(Node* pNode);
+
 
 JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* pFields, int fieldAmount, JsonFuncs_InputType FileOrString)
 {
@@ -96,7 +99,7 @@ JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* pFields, int fi
         .Value.StringValue = "root"
     };
     Node rootNode = (Node){
-        .ppChildNodes = NULL,
+        .pChildNodes = NULL,
         .pToken = &rootToken,
         .ChildCount = 0
     };
@@ -133,17 +136,17 @@ void JsonFuncs_Serialize()
 }
 
 /*************************************\
- * fn: @StringWithoutWhitespace 
- * 
- * param1: const char*: string to remove whitespace from
- * param2: int: length of the string
- * 
- * return char*: pointer to the start of the string without whitespace
- * 
- * desc: removes all whitespace from a string
- * 
- * note: allocates new memory for the new string, remember to free it after use
- * 
+  fn: @StringWithoutWhitespace 
+  
+  param1: const char*: string to remove whitespace from
+  param2: int: length of the string
+  
+  return char*: pointer to the start of the string without whitespace
+  
+  desc: removes all whitespace from a string
+  
+  note: allocates new memory for the new string, remember to free it after use
+  
 \**************************************/
 static char* StringWithoutWhitespace(const char* string, u32 len)
 {
@@ -165,16 +168,16 @@ static char* StringWithoutWhitespace(const char* string, u32 len)
 }
 
 /*************************************\
- * fn: @GetTokenAmount 
- * 
- * param1: const char*: string to remove whitespace from
- * 
- * return i32: pointer to the start of the string without whitespace
- * 
- * desc: removes all whitespace from a string
- * 
- * note: allocates new memory for the new string, remember to free it after use
- * 
+  fn: @GetTokenAmount 
+  
+  param1: const char*: string to remove whitespace from
+  
+  return i32: pointer to the start of the string without whitespace
+  
+  desc: removes all whitespace from a string
+  
+  note: allocates new memory for the new string, remember to free it after use
+  
 \**************************************/
 static i32 GetTokenAmount(char* json)
 {
@@ -232,18 +235,18 @@ static i32 GetTokenAmount(char* json)
 }
 
 /*************************************\
- * fn: @FillTokenArray 
- * 
- * param1 Token*: array of tokens to fill
- * param2 u16: amount of tokens in the array
- * param2: char*: string to parse tokens from
- * 
- * return JsonFuncsError: error code
- * 
- * desc: fills an array of tokens from a json string
- * 
- * note: allocates memory for string and array tokens, remember to free them after use
- * 
+  fn: @FillTokenArray 
+  
+  param1 Token*: array of tokens to fill
+  param2 u16: amount of tokens in the array
+  param2: char*: string to parse tokens from
+  
+  return JsonFuncsError: error code
+  
+  desc: fills an array of tokens from a json string
+  
+  note: allocates memory for string and array tokens, remember to free them after use
+  
 \**************************************/
 static JsonFuncs_Return FillTokenArray(Token* pTokens, u16 tokenAmount, char* json)
 {
@@ -364,18 +367,18 @@ static JsonFuncs_Return FillTokenArray(Token* pTokens, u16 tokenAmount, char* js
 }
 
 /*************************************\
- * fn: @AssignValues
- * 
- * param1: JsonField*: array of fields to assign values to given by the API caller
- * param2: u32: amount of fields given by the API caller
- * param3: Node*: pointer to the root node of the tree
- * 
- * return JsonFuncsError: return error code
- * 
- * desc: assigns values from the key-value pairs to the corresponding fields by matching key names
- * 
- * note: does not support arrays yet
- * 
+  fn: @AssignValues
+  
+  param1: JsonField*: array of fields to assign values to given by the API caller
+  param2: u32: amount of fields given by the API caller
+  param3: Node*: pointer to the root node of the tree
+  
+  return JsonFuncsError: return error code
+  
+  desc: assigns values from the key-value pairs to the corresponding fields by matching key names
+  
+  note: does not support arrays yet
+  
 \**************************************/
 static JsonFuncs_Return AssignValues(JsonField* pFields, int fieldAmount, Node* pRootNode)
 {
@@ -387,30 +390,27 @@ static JsonFuncs_Return AssignValues(JsonField* pFields, int fieldAmount, Node* 
         Node* pCurrentNode = pRootNode;
         while (fgetsFromString(stringBuffer, BUFFER_SIZE, &stringPointer, '.'))
             for (u16 j = 0; j < pCurrentNode->ChildCount; j++)
-            {
-                u8 isKeynameEqual = !strcmp(pCurrentNode->ppChildNodes[j]->pToken->Value.StringValue, stringBuffer);
-                if (isKeynameEqual)
-                    pCurrentNode = pCurrentNode->ppChildNodes[j];
-            }
+                    if (!strcmp(pCurrentNode->pChildNodes[j].pToken->Value.StringValue, stringBuffer))
+                        pCurrentNode = &pCurrentNode->pChildNodes[j];
                 
 
-        if (pCurrentNode->ChildCount != 1 || pCurrentNode->ppChildNodes[0]->ChildCount != 0)
+        if (pCurrentNode->ChildCount != 1 || pCurrentNode->pChildNodes[0].ChildCount != 0)
         {
             result = JSONFUNCS_ERROR_NESTED_VALUE;
             break;
         }
 
-        switch (pCurrentNode->ppChildNodes[0]->pToken->Type)
+        switch (pCurrentNode->pChildNodes[0].pToken->Type)
         {
             case NUMBER: 
-                *((double*)pFields[i].Destination) = pCurrentNode->ppChildNodes[0]->pToken->Value.NumberValue;
+                *((double*)pFields[i].Destination) = pCurrentNode->pChildNodes[0].pToken->Value.NumberValue;
                 break;
             case BOOL:
-                *((u8*)pFields[i].Destination) = pCurrentNode->ppChildNodes[0]->pToken->Value.BoolValue;
+                *((u8*)pFields[i].Destination) = pCurrentNode->pChildNodes[0].pToken->Value.BoolValue;
                 break;
             case STRING: 
-                char* copy = malloc(strlen(pCurrentNode->ppChildNodes[0]->pToken->Value.StringValue) + 1);
-                strcpy(copy, pCurrentNode->ppChildNodes[0]->pToken->Value.StringValue);
+                char* copy = malloc(strlen(pCurrentNode->pChildNodes[0].pToken->Value.StringValue) + 1);
+                strcpy(copy, pCurrentNode->pChildNodes[0].pToken->Value.StringValue);
                 *((char**)pFields[i].Destination) = copy;
                 break;
             case NULLVALUE:
@@ -422,19 +422,19 @@ static JsonFuncs_Return AssignValues(JsonField* pFields, int fieldAmount, Node* 
 }
 
 /*************************************\
- * fn: @fgetsFromString
- * 
- * param1: char*: the place where to return the string
- * param2: u32: len of the string
- * param3: const char**: the pointer to the current part of the string, will be changed by this function
- * param4: char: the character that splits the strings
- * 
- * return char*: the returned string
- * 
- * desc: basically like fgets but for strings and you can choose the splitting character
- * 
- * note: keep in mind that the source ptr will get incremented
- * 
+  fn: @fgetsFromString
+  
+  param1: char*: the place where to return the string
+  param2: u32: len of the string
+  param3: const char**: the pointer to the current part of the string, will be changed by this function
+  param4: char: the character that splits the strings
+  
+  return char*: the returned string
+  
+  desc: basically like fgets but for strings and you can choose the splitting character
+  
+  note: keep in mind that the source ptr will get incremented
+  
 \**************************************/
 static char* fgetsFromString(char* destination, u32 len, const char** source, char splittingCharacter)
 {
@@ -455,91 +455,77 @@ static char* fgetsFromString(char* destination, u32 len, const char** source, ch
 }
 
 /*************************************\
- * fn: @BuildTree
- * 
- * param1: Token*: list of tokens to create tree from
- * param2: u16: pass in start index of pTokens
- * param3: u16: pass in length of pTokens
- * param4: Node*: the root node of the tree
- * 
- * return JsonFuncsError: error code
- * 
- * desc: Builds the json tree from the tokens
- * 
- * note: allocates heap memory
- * 
+  fn: @BuildTree
+  
+  param1: Token*: list of tokens to create tree from
+  param2: u16: pass in start index of pTokens
+  param3: u16: pass in length of pTokens
+  param4: Node*: the root node of the tree
+  
+  return JsonFuncsError: error code
+  
+  desc: Builds the json tree from the tokens
+  
+  note: allocates heap memory
+  
 \**************************************/
 static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pParentNode)
 {
-    u8 result = JSONFUNCS_OK;
+    JsonFuncs_Return result = JSONFUNCS_OK;
     u16 searchDepth = pParentNode->pToken->Depth + 1;
 
     // Count children
     pParentNode->ChildCount = 0;
-    for (int i = start; i < end; i++)
+    for (u16 i = start; i < end; i++)
         if (pTokens[i].Type == COLON && pTokens[i].Depth == searchDepth)
             pParentNode->ChildCount++;
 
     // Allocate array of Node*
-    pParentNode->ppChildNodes = malloc(pParentNode->ChildCount * sizeof(Node*));
-    if (pParentNode->ppChildNodes == NULL)
+    pParentNode->pChildNodes = malloc(pParentNode->ChildCount * sizeof(Node));
+    if (pParentNode->pChildNodes == NULL)
     {
         result = JSONFUNCS_ERROR_MALLOC_FAILED;
         goto cleanup;
     }
-
+    
     // Initialize child nodes
     u16 index = 0;
     for (int i = start; i < end; i++)
         if (pTokens[i].Type == COLON && pTokens[i].Depth == searchDepth)
-        {
-            Node* child = malloc(sizeof(Node));
-            if (child == NULL)
-            {
-                result = JSONFUNCS_ERROR_MALLOC_FAILED;
-                goto cleanup;
-            }
-
-            child->ChildCount = 0;
-            child->ppChildNodes = NULL;
-            child->pToken = &pTokens[i-1];
-
-            pParentNode->ppChildNodes[index++] = child;
-        }
+            pParentNode->pChildNodes[index++] = (Node){
+                .ChildCount = 0,
+                .pChildNodes = NULL,
+                .pToken = &pTokens[i-1],
+                .pParentNode = pParentNode
+            };
 
     // Recurse / add grandchildren
     for (int i = 0; i < pParentNode->ChildCount; i++)
     {
-        Node* child = pParentNode->ppChildNodes[i];
-
-        ptrdiff_t valueIndex = (child->pToken - pTokens) + 2;
+        Node* pChildNode = &pParentNode->pChildNodes[i];
+        
+        ptrdiff_t valueIndex = (pChildNode->pToken - pTokens) + 2;
         if (valueIndex >= end)
         {
             result = JSONFUNCS_ERROR_INVALID_JSON;
             goto cleanup;
         }
-
+        
         if (pTokens[valueIndex].Type != LEFT_BRACE)
         {
             // allocate single child
-            child->ChildCount = 1;
-            child->ppChildNodes = malloc(sizeof(Node*));
-            if (child->ppChildNodes == NULL)
+            pChildNode->ChildCount = 1;
+            pChildNode->pChildNodes = malloc(sizeof(Node));
+            if (pChildNode->pChildNodes == NULL)
             {
                 result = JSONFUNCS_ERROR_MALLOC_FAILED;
                 goto cleanup;
             }
-
-            child->ppChildNodes[0] = malloc(sizeof(Node));
-            if (child->ppChildNodes[0] == NULL)
-            {
-                result = JSONFUNCS_ERROR_MALLOC_FAILED;
-                goto cleanup;
-            }
-
-            child->ppChildNodes[0]->pToken = &pTokens[valueIndex];
-            child->ppChildNodes[0]->ChildCount = 0;
-            child->ppChildNodes[0]->ppChildNodes = NULL;
+            
+            pChildNode->pChildNodes[0].pToken = &pTokens[valueIndex];
+            pChildNode->pChildNodes[0].ChildCount = 0;
+            pChildNode->pChildNodes[0].pChildNodes = NULL;
+            pChildNode->pChildNodes[0].pParentNode = pChildNode;
         }
         else
         {
@@ -549,15 +535,15 @@ static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pPar
             {
                 if (pTokens[j].Type == LEFT_BRACE) depth++;
                 else if (pTokens[j].Type == RIGHT_BRACE) depth--;
-
+            
                 if (depth == 0)
                 {
                     newEndIndex = j;
                     break;
                 }
             }
-
-            if (newEndIndex == 0 || BuildTree(pTokens, valueIndex + 1, newEndIndex, child)) //short curcuit condition
+            
+            if (newEndIndex == 0 || BuildTree(pTokens, valueIndex + 1, newEndIndex, pChildNode)) //short curcuit condition
             {
                 result = JSONFUNCS_ERROR_INVALID_JSON;
                 goto cleanup;
@@ -568,27 +554,24 @@ static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pPar
     return result;
 
     cleanup:
-        for (int i = 0; i < pParentNode->ChildCount; i++)
-            free(pParentNode->ppChildNodes[i]);
-        free(pParentNode->ppChildNodes);
-        pParentNode->ppChildNodes = NULL;
-        pParentNode->ChildCount = 0;
-
+        if (!pParentNode->pToken->Depth) //if its the root node
+            FreeTree(pParentNode);
+    
         return result;
 }
 
 /*************************************\
- * fn: @FileToString
- * 
- * param1: const char*: the path of the file
- * param2: char**: place to save string to
- * 
- * return JsonFuncsError: error code
- * 
- * desc: gets all contents of a file at given path, allocates memory and sets its pointer to the out param
- * 
- * note: allocates heap memory
- * 
+  fn: @FileToString
+  
+  param1: const char*: the path of the file
+  param2: char**: place to save string to
+  
+  return JsonFuncsError: error code
+  
+  desc: gets all contents of a file at given path, allocates memory and sets its pointer to the out param
+  
+  note: allocates heap memory
+ 
 \**************************************/
 static JsonFuncs_Return FileToString(const char* fileName, char** out)
 {
@@ -615,4 +598,29 @@ static JsonFuncs_Return FileToString(const char* fileName, char** out)
     fclose(file);
     *out = buffer;
     return JSONFUNCS_OK;
+}
+
+/*************************************\
+  fn: @FreeTree
+  
+  param1 Node*: pointer to the root node
+  
+  return: 
+  
+  desc: frees the json token tree
+  
+  note: recursive
+ 
+\**************************************/
+static void FreeTree(Node* pNode)
+{
+    if (pNode->ChildCount)
+    {
+        for (u32 i = 0; i < pNode->ChildCount; i++)
+            FreeTree(&pNode->pChildNodes[i]);
+        pNode->ChildCount = 0;
+        if (pNode->pChildNodes == NULL) return;
+        free(pNode->pChildNodes);
+        pNode->pChildNodes = NULL;
+    }
 }
