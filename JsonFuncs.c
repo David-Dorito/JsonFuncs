@@ -1,7 +1,6 @@
 /*********\
 TODO: add array support
 TODO: add int support (currently double)
-FIXME: fix removing whitespace in strings in RemoveWhiteSpace func
 FIXME: make Deserialize more robust, sometimes it can even segfault with incorrect json
 \*********/
 
@@ -151,19 +150,26 @@ void JsonFuncs_Serialize()
 static char* StringWithoutWhitespace(const char* string, u32 len)
 {
     u32 newStringSize = 0;
+    u8 inString = 0;
     for (u32 i = 0; i < len; i++)
-        if (!isspace((unsigned char)string[i]))
-            newStringSize++;
+    {
+        if (string[i] == '\"') inString = !inString;
+        if (!isspace((unsigned char)string[i]) || inString) newStringSize++;
+    }
 
     char* newArray = malloc((newStringSize + 1) * sizeof(char));
     if (newArray == NULL) return NULL;
 
+    inString = 0;
     u32 OriginalArrayOffset = 0;
     for (u32 i = 0; i-OriginalArrayOffset < newStringSize; i++)
-        if (!isspace((unsigned char)string[i])) newArray[i-OriginalArrayOffset] = string[i];
+    {
+        if (string[i] == '\"') inString = !inString;
+        if (!isspace((unsigned char)string[i]) || inString) newArray[i-OriginalArrayOffset] = string[i];
         else OriginalArrayOffset++;
+    }
     newArray[newStringSize] = '\0';
-
+    
     return newArray;
 }
 
