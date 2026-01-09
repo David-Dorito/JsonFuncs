@@ -63,25 +63,20 @@ static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pPar
 static char* fgetsFromString(char* destination, u32 len, const char** source, char splittingCharacter);
 static JsonFuncs_Return FileToString(const char* fileName, char** out);
 static void FreeTree(Node* pNode);
-
+static JsonFuncs_Return GetJsonString(JsonFuncs_InputType FileOrString, char** ppDestination, char* jsonFileOrString);
 
 JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* pFields, int fieldAmount, JsonFuncs_InputType FileOrString)
 {
     char* json;
-    if (FileOrString == JSONFUNCS_INPUT_JSONFILE)
-    {
-        char* fileContents;
-        JsonFuncs_Return errorCode = FileToString(rawJson, &fileContents);
-        if (errorCode) return errorCode;
-        json = StringWithoutWhitespace(fileContents, strlen(fileContents));
-        free(fileContents);
-    }
-    else json = StringWithoutWhitespace(rawJson, strlen(rawJson));
-    
-    if (json == NULL) return JSONFUNCS_ERROR_MALLOC_FAILED;
+    JsonFuncs_Return GetJsonStringReturn = GetJsonString(FileOrString, &json, rawJson);
+    if (GetJsonStringReturn != JSONFUNCS_OK) return GetJsonStringReturn;
 
     i32 tokenAmount = GetTokenAmount(json);
-    if (tokenAmount == -1) return JSONFUNCS_ERROR_INVALID_JSON;
+    if (tokenAmount == -1)
+    {
+        free(json);
+        return JSONFUNCS_ERROR_INVALID_JSON;
+    }
 
     Token* pTokens = malloc(tokenAmount * sizeof(Token));
     if (pTokens == NULL)
@@ -90,7 +85,12 @@ JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* pFields, int fi
         return JSONFUNCS_ERROR_MALLOC_FAILED;
     }
 
-    if (FillTokenArray(pTokens, tokenAmount, json) != 0) return JSONFUNCS_ERROR_MALLOC_FAILED;
+    if (FillTokenArray(pTokens, tokenAmount, json)) 
+    {
+        free(json);
+        free(pTokens);
+        return JSONFUNCS_ERROR_MALLOC_FAILED;
+    }
 
     Token rootToken = (Token){
         .Depth = 0,
@@ -102,7 +102,13 @@ JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* pFields, int fi
         .pToken = &rootToken,
         .ChildCount = 0
     };
-    if (BuildTree(pTokens, 0, tokenAmount, &rootNode)) return JSONFUNCS_ERROR_INVALID_JSON;
+    JsonFuncs_Return BuildTreeResult = BuildTree(pTokens, 0, tokenAmount, &rootNode);
+    if (BuildTreeResult)
+    {
+        free(json);
+        free(pTokens);
+        return BuildTreeResult;
+    }
 
     AssignValues(pFields, fieldAmount, &rootNode);
 
@@ -121,6 +127,7 @@ JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* pFields, int fi
     printf("]\n");
 
     //free unneeded memory
+    FreeTree(&rootNode);
     for (u32 i = 0; i < tokenAmount; i++)
         if (pTokens[i].Type == STRING || pTokens[i].Type == ARRAY) free(pTokens[i].Value.StringValue);
     free(pTokens);
@@ -486,6 +493,12 @@ static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pPar
         if (pTokens[i].Type == COLON && pTokens[i].Depth == searchDepth)
             pParentNode->ChildCount++;
 
+    if (!pParentNode->ChildCount)
+    {
+        result = JSONFUNCS_ERROR_INVALID_JSON;
+        goto cleanup;
+    }
+
     // Allocate array of Node*
     pParentNode->pChildNodes = malloc(pParentNode->ChildCount * sizeof(Node));
     if (pParentNode->pChildNodes == NULL)
@@ -498,12 +511,21 @@ static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pPar
     u16 index = 0;
     for (int i = start; i < end; i++)
         if (pTokens[i].Type == COLON && pTokens[i].Depth == searchDepth)
+        {
+            //TODO: check if key is a string
+            if (pTokens[i-1].Type != STRING)
+            {
+                result = JSONFUNCS_ERROR_INVALID_JSON;
+                goto cleanup;
+                
+            }
             pParentNode->pChildNodes[index++] = (Node){
                 .ChildCount = 0,
                 .pChildNodes = NULL,
                 .pToken = &pTokens[i-1],
                 .pParentNode = pParentNode
             };
+        }
 
     // Recurse / add grandchildren
     for (int i = 0; i < pParentNode->ChildCount; i++)
@@ -511,11 +533,26 @@ static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pPar
         Node* pChildNode = &pParentNode->pChildNodes[i];
         
         ptrdiff_t valueIndex = (pChildNode->pToken - pTokens) + 2;
+        
+        //small invalid json check -----------------
         if (valueIndex >= end)
         {
             result = JSONFUNCS_ERROR_INVALID_JSON;
             goto cleanup;
         }
+        u8 jsonValidTest = 0;
+        switch (pTokens[valueIndex].Type)
+        {
+            case RIGHT_BRACE: jsonValidTest = 1; break;
+            case COLON: jsonValidTest = 1; break;
+            case COMMA: jsonValidTest = 1; break;
+        }
+        if (jsonValidTest)
+        {
+            result = JSONFUNCS_ERROR_INVALID_JSON;
+            goto cleanup;
+        }
+        //------------------------------------------
         
         if (pTokens[valueIndex].Type != LEFT_BRACE)
         {
@@ -527,11 +564,13 @@ static JsonFuncs_Return BuildTree(Token* pTokens, u16 start, u16 end, Node* pPar
                 result = JSONFUNCS_ERROR_MALLOC_FAILED;
                 goto cleanup;
             }
-            
-            pChildNode->pChildNodes[0].pToken = &pTokens[valueIndex];
-            pChildNode->pChildNodes[0].ChildCount = 0;
-            pChildNode->pChildNodes[0].pChildNodes = NULL;
-            pChildNode->pChildNodes[0].pParentNode = pChildNode;
+
+            pChildNode->pChildNodes[0] = (Node){
+                .pToken = &pTokens[valueIndex],
+                .ChildCount = 0,
+                .pChildNodes = NULL,
+                .pParentNode = pChildNode
+            };
         }
         else
         {
@@ -629,4 +668,34 @@ static void FreeTree(Node* pNode)
         free(pNode->pChildNodes);
         pNode->pChildNodes = NULL;
     }
+}
+
+/*************************************\
+  fn: @GetJsonString
+  
+  param1 JsonFuncs_InputType: decides if param3 is raw json or a file path 
+  param2 char**: place to store the json string
+  param3 char*: the raw json string or file path
+  
+  return JsonFuncs_Return: error code 
+  
+  desc: gets the json string from the file and removes whitespace or just removes whitespace
+  
+  note: 
+ 
+\**************************************/
+static JsonFuncs_Return GetJsonString(JsonFuncs_InputType FileOrString, char** ppDestination, char* jsonFileOrString)
+{
+    if (FileOrString == JSONFUNCS_INPUT_JSONFILE)
+    {
+        char* fileContents;
+        JsonFuncs_Return errorCode = FileToString(jsonFileOrString, &fileContents);
+        if (errorCode) return errorCode;
+        *ppDestination = StringWithoutWhitespace(fileContents, strlen(fileContents));
+        free(fileContents);
+    }
+    else *ppDestination = StringWithoutWhitespace(jsonFileOrString, strlen(jsonFileOrString));
+
+    if (ppDestination == NULL) return JSONFUNCS_ERROR_MALLOC_FAILED;
+    else return JSONFUNCS_OK;
 }
