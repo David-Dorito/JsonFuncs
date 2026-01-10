@@ -1,6 +1,5 @@
 /*********\
 TODO: add array support
-TODO: add int support (currently double)
 FIXME: make Deserialize more robust, sometimes it can even segfault with incorrect json
 \*********/
 
@@ -49,10 +48,10 @@ typedef struct {
 
 typedef struct Node Node;
 struct Node {
+    Token* pToken;
     Node* pParentNode;
     Node* pChildNodes;
     u16 ChildCount;
-    Token* pToken;
 };
 
 static char* StringWithoutWhitespace(const char* string, u32 len);
@@ -413,18 +412,48 @@ static JsonFuncs_Return AssignValues(JsonField* pFields, int fieldAmount, Node* 
             break;
         }
 
+        //the part to assign values to the api caller defined places
         switch (pCurrentNode->pChildNodes[0].pToken->Type)
         {
             case NUMBER: 
-                *((double*)pFields[i].Destination) = pCurrentNode->pChildNodes[0].pToken->Value.NumberValue;
+                switch (pFields[i].Datatype)
+                {
+                    case JSONFUNCS_BOOL:
+                    case JSONFUNCS_I8:
+                    case JSONFUNCS_U8:
+                        *((u8*)pFields[i].Destination) = (u8)pCurrentNode->pChildNodes[0].pToken->Value.NumberValue;
+                        break;
+                    case JSONFUNCS_I16:
+                    case JSONFUNCS_U16:
+                        *((u16*)pFields[i].Destination) = (u16)pCurrentNode->pChildNodes[0].pToken->Value.NumberValue;
+                        break;
+                    case JSONFUNCS_U32:
+                    case JSONFUNCS_I32:
+                        *((u32*)pFields[i].Destination) = (u32)pCurrentNode->pChildNodes[0].pToken->Value.NumberValue;
+                        break;
+                    case JSONFUNCS_FLOAT:
+                        *((float*)pFields[i].Destination) = (float)pCurrentNode->pChildNodes[0].pToken->Value.NumberValue;
+                        break;
+                    case JSONFUNCS_DOUBLE:
+                        *((double*)pFields[i].Destination) = pCurrentNode->pChildNodes[0].pToken->Value.NumberValue;
+                        break;
+                };
                 break;
             case BOOL:
                 *((u8*)pFields[i].Destination) = pCurrentNode->pChildNodes[0].pToken->Value.BoolValue;
                 break;
             case STRING: 
-                char* copy = malloc(strlen(pCurrentNode->pChildNodes[0].pToken->Value.StringValue) + 1);
-                strcpy(copy, pCurrentNode->pChildNodes[0].pToken->Value.StringValue);
-                *((char**)pFields[i].Destination) = copy;
+                switch (pFields[i].Datatype)
+                {
+                    case JSONFUNCS_CHAR:
+                        *((char*)pFields[i].Destination) = pCurrentNode->pChildNodes[0].pToken->Value.StringValue[0];
+                        break;
+                    case JSONFUNCS_STRING:
+                        char* copy = malloc(strlen(pCurrentNode->pChildNodes[0].pToken->Value.StringValue) + 1);
+                        strcpy(copy, pCurrentNode->pChildNodes[0].pToken->Value.StringValue);
+                        *((char**)pFields[i].Destination) = copy;
+                        break;
+                }
                 break;
             case NULLVALUE:
                 memset(pFields[i].Destination, 0, pFields[i].Size);

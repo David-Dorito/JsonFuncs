@@ -3,10 +3,28 @@
 
 #include <ctype.h>
 
+typedef enum {
+    JSONFUNCS_U8,
+    JSONFUNCS_U16,
+    JSONFUNCS_U32,
+    JSONFUNCS_U64,
+    JSONFUNCS_I8,
+    JSONFUNCS_I16,
+    JSONFUNCS_I32,
+    JSONFUNCS_I64,
+    JSONFUNCS_FLOAT,
+    JSONFUNCS_DOUBLE,
+    JSONFUNCS_CHAR,
+    JSONFUNCS_STRING,
+    JSONFUNCS_BOOL,
+    JSONFUNCS_ARRAY
+} JsonFuncs_Datatype;
+
 typedef struct {
     const char* KeyName;
     void* Destination;
     size_t Size;
+    JsonFuncs_Datatype Datatype;
 } JsonField;
 
 typedef enum {

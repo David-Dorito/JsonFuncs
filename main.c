@@ -5,9 +5,10 @@
 #include "JsonFuncs.h"
 typedef struct {
     char* Username;
-    double Level;
+    uint8_t Level;
     uint8_t IsActive;
     char* test;
+    char CharTest;
 } Player;
 
 char* FileToString(const char* filename);
@@ -27,22 +28,32 @@ int main(void)
         (JsonField){
             .KeyName = "Player.Username",
             .Destination = &player.Username,
-            .Size = sizeof(player.Username)
+            .Size = sizeof(player.Username),
+            .Datatype = JSONFUNCS_STRING
         },
         (JsonField){
             .KeyName = "Player.IsActive",
             .Destination = &player.IsActive,
-            .Size = sizeof(player.IsActive)
+            .Size = sizeof(player.IsActive),
+            .Datatype = JSONFUNCS_BOOL
         },
         (JsonField){
             .KeyName = "Player.Level",
             .Destination = &player.Level,
-            .Size = sizeof(player.Level)
+            .Size = sizeof(player.Level),
+            .Datatype = JSONFUNCS_U8
         },
         (JsonField){
             .KeyName = "Player.test.test",
             .Destination = &player.test,
-            .Size = sizeof(player.test)
+            .Size = sizeof(player.test),
+            .Datatype = JSONFUNCS_STRING
+        },
+        (JsonField){
+            .KeyName = "Player.CharTest",
+            .Destination = &player.CharTest,
+            .Size = sizeof(player.CharTest),
+            .Datatype = JSONFUNCS_CHAR
         }
     };
 
@@ -54,9 +65,9 @@ int main(void)
 
     printf("player username: %s\n", player.Username);
     printf("player IsActive: %d\n", player.IsActive);
-    printf("player Level: %f\n", player.Level);
+    printf("player Level: %d\n", player.Level);
     printf("player test: %s\n", player.test);
-
+    printf("player CharTest: %c\n", player.CharTest);
 
     free(player.Username);
     free(fileContents);
