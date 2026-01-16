@@ -12,6 +12,12 @@ FIXME: make Deserialize more robust, sometimes it can even segfault with incorre
 
 #define BUFFER_SIZE         1024
 
+#ifdef JSONFUNCS_DEBUG
+    #define DEBUG_RUN(code) do { code } while(0)
+#else
+    #define DEBUG_RUN(code) do { } while(0)
+#endif
+
 typedef int64_t             i64;
 typedef int32_t             i32;
 typedef int16_t             i16;
@@ -111,19 +117,21 @@ JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* pFields, int fi
 
     AssignValues(pFields, fieldAmount, &rootNode);
 
-    //output stuff for debugging
-    printf("%s\n", json);
-    printf("token array\n[");
-    for (u32 i = 0; i < tokenAmount; i++)
-    {
-        if (pTokens[i].Type == STRING) printf(" %s ", pTokens[i].Value.StringValue);
-        else if (pTokens[i].Type == NUMBER) printf(" %f ", pTokens[i].Value.NumberValue);
-        else if (pTokens[i].Type == NULLVALUE) printf(" NULL ");
-        else if (pTokens[i].Type == BOOL) printf(" %d ", pTokens[i].Value.BoolValue);
-        else if (pTokens[i].Type == ARRAY) printf(" %s ", pTokens[i].Value.StringValue);
-        else printf(" %c ", pTokens[i].Value.CharValue);
-    }
-    printf("]\n");
+    DEBUG_RUN(
+        //output stuff for debugging
+        printf("%s\n", json);
+        printf("token array\n[");
+        for (u32 i = 0; i < tokenAmount; i++)
+        {
+            if (pTokens[i].Type == STRING) printf(" %s ", pTokens[i].Value.StringValue);
+            else if (pTokens[i].Type == NUMBER) printf(" %f ", pTokens[i].Value.NumberValue);
+            else if (pTokens[i].Type == NULLVALUE) printf(" NULL ");
+            else if (pTokens[i].Type == BOOL) printf(" %d ", pTokens[i].Value.BoolValue);
+            else if (pTokens[i].Type == ARRAY) printf(" %s ", pTokens[i].Value.StringValue);
+            else printf(" %c ", pTokens[i].Value.CharValue);
+        }
+        printf("]\n");
+    );
 
     //free unneeded memory
     FreeTree(&rootNode);

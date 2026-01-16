@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "JsonFuncs.h"
+
 typedef struct {
     char* Username;
     uint8_t Level;
