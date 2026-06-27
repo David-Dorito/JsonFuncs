@@ -81,6 +81,14 @@ static JsonFuncs_Return getFileToString(const char* fileName, char** out);
 static void             freeTree(Node* node);
 static JsonFuncs_Return getJsonString(JsonFuncs_InputType fileOrString, char** destination,
                                       char* jsonFileOrString);
+static void             freeUsedMem(char* json, Token* tokens, uint16 tokenCount, Node* rootNode);
+static bool             isWhitespace(char character);
+static uint32           getStringWithoutWhitespaceLen(const char* string, uint32 len);
+static void             copyStringWithoutWhitespace(const char* string, uint32 len, char* newStringBuffer,
+                                                    uint32 newStringLen);
+static bool             isCharInString(const char* string, const char character);
+static bool             isAlphabeticChar(char character);
+static bool             areStringsEqual(const char* string1, const char* string2);
 
 JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* fields, int fieldCount,
                                        JsonFuncs_InputType fileOrString) {
@@ -164,13 +172,7 @@ JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* fields, int fie
 	);
 	// clang-format on
 
-	// free unneeded memory
-	freeTree(&rootNode);
-	for (uint32 i = 0; i < tokenCount; i++)
-		if (tokens[i].Type == STRING || tokens[i].Type == ARRAY)
-			free(tokens[i].Value.StringValue);
-	free(tokens);
-	free(json);
+	freeUsedMem(json, tokens, tokenCount, &rootNode);
 
 	return JSONFUNCS_OK;
 }
@@ -192,32 +194,15 @@ void JsonFuncs_Serialize() {
 
 \**************************************/
 static char* getStringWithoutWhitespace(const char* string, uint32 len) {
-	uint32 newStringSize = 0;
-	bool   isInString = false;
-	for (uint32 i = 0; i < len; i++) {
-		if (string[i] == '\"')
-			isInString = !isInString;
-		if (!isspace((unsigned char)string[i]) || isInString)
-			newStringSize++;
-	}
+	uint32 newStringLen = getStringWithoutWhitespaceLen(string, len);
 
-	char* newArray = malloc((newStringSize + 1) * sizeof(char));
-	if (newArray == NULL)
+	char* newString = malloc((newStringLen + 1) * sizeof(char));
+	if (newString == NULL)
 		return NULL;
 
-	isInString = false;
-	uint32 OriginalArrayOffset = 0;
-	for (uint32 i = 0; i - OriginalArrayOffset < newStringSize; i++) {
-		if (string[i] == '\"')
-			isInString = !isInString;
-		if (!isspace((unsigned char)string[i]) || isInString)
-			newArray[i - OriginalArrayOffset] = string[i];
-		else
-			OriginalArrayOffset++;
-	}
-	newArray[newStringSize] = '\0';
+	copyStringWithoutWhitespace(string, len, newString, newStringLen);
 
-	return newArray;
+	return newString;
 }
 
 /*************************************\
@@ -237,9 +222,9 @@ static int32 getTokenCount(char* json) {
 	uint32 len = strlen(json);
 
 	for (uint32 i = 0; i < len; i++) {
-		if (strchr("1234567890.", json[i]) != NULL) {
+		if (isCharInString("1234567890.", json[i])) {
 			tokenCount++;
-			while (strchr("1234567890.", json[i + 1]) != NULL)
+			while (isCharInString("1234567890.", json[i + 1]))
 				i++;
 		} else if (json[i] == '\"') {
 			tokenCount++;
@@ -249,7 +234,7 @@ static int32 getTokenCount(char* json) {
 					return -1; // invalid json
 				i++;
 			}
-		} else if (isalpha(json[i])) {
+		} else if (isAlphabeticChar(json[i])) {
 			const uint32 start = i;
 			while (isalpha(json[i]))
 				i++;
@@ -263,11 +248,11 @@ static int32 getTokenCount(char* json) {
 
 			tokenCount++;
 			i--;
-			if (!strcmp(buffer, "null"))
+			if (areStringsEqual(buffer, "null"))
 				continue;
-			else if (!strcmp(buffer, "true"))
+			else if (areStringsEqual(buffer, "true"))
 				continue;
-			else if (!strcmp(buffer, "false"))
+			else if (areStringsEqual(buffer, "false"))
 				continue;
 			else
 				return -1; // invalid json
@@ -278,7 +263,7 @@ static int32 getTokenCount(char* json) {
 					return -1; // invalid json
 				i++;
 			}
-		} else if (strchr("{}:,", json[i]) != NULL)
+		} else if (isCharInString("{}:,", json[i]))
 			tokenCount++;
 	}
 
@@ -302,9 +287,9 @@ static int32 getTokenCount(char* json) {
 static JsonFuncs_Return fillTokenArray(Token* tokens, uint16 tokenCount, char* json) {
 	uint32 nextTokenIndex = 0;
 	for (uint32 i = 0; i < strlen(json); i++) {
-		if (strchr("1234567890.", json[i]) != NULL) {
+		if (isCharInString("1234567890.", json[i])) {
 			uint32 j = i;
-			while (json[j] != '\0' && strchr("1234567890.", json[j]) != NULL)
+			while (json[j] != '\0' && isCharInString("1234567890.", json[j]))
 				j++;
 			uint32 stringSize = (j - i) + 1;
 
@@ -365,7 +350,7 @@ static JsonFuncs_Return fillTokenArray(Token* tokens, uint16 tokenCount, char* j
 			    .Type = ARRAY,
 			    .Value.StringValue = arrayString,
 			};
-		} else if (strchr("{}:,", json[i]) != NULL) {
+		} else if (isCharInString("{}:,", json[i])) {
 			TokenType type;
 			switch (json[i]) {
 			case '{':
@@ -386,9 +371,9 @@ static JsonFuncs_Return fillTokenArray(Token* tokens, uint16 tokenCount, char* j
 			    .Type = type,
 			    .Value.CharValue = json[i],
 			};
-		} else if (isalpha(json[i])) {
+		} else if (isAlphabeticChar(json[i])) {
 			const uint32 start = i;
-			while (isalpha(json[i]))
+			while (isAlphabeticChar(json[i]))
 				i++;
 			const uint32 len = i - start;
 
@@ -397,17 +382,17 @@ static JsonFuncs_Return fillTokenArray(Token* tokens, uint16 tokenCount, char* j
 			buffer[len] = '\0';
 
 			i--;
-			if (!strcmp(buffer, "null"))
+			if (areStringsEqual(buffer, "null"))
 				tokens[nextTokenIndex++] = (Token){
 				    .Type = NULLVALUE,
 				    .Value.BoolValue = 0,
 				};
-			else if (!strcmp(buffer, "true"))
+			else if (areStringsEqual(buffer, "true"))
 				tokens[nextTokenIndex++] = (Token){
 				    .Type = BOOL,
 				    .Value.BoolValue = 1,
 				};
-			else if (!strcmp(buffer, "false"))
+			else if (areStringsEqual(buffer, "false"))
 				tokens[nextTokenIndex++] = (Token){
 				    .Type = BOOL,
 				    .Value.BoolValue = 0,
@@ -762,4 +747,62 @@ static JsonFuncs_Return getJsonString(JsonFuncs_InputType fileOrString, char** d
 	}
 
 	return JSONFUNCS_OK;
+}
+
+static void freeUsedMem(char* json, Token* tokens, uint16 tokenCount, Node* rootNode) {
+	freeTree(rootNode);
+	for (uint32 i = 0; i < tokenCount; i++)
+		if (tokens[i].Type == STRING || tokens[i].Type == ARRAY)
+			free(tokens[i].Value.StringValue);
+	free(tokens);
+	free(json);
+}
+
+static bool isWhitespace(char character) {
+	return (bool)isspace(character);
+}
+
+static uint32 getStringWithoutWhitespaceLen(const char* string, uint32 len) {
+	uint32 newStringSize = 0;
+	bool   isInString = false;
+	for (uint32 i = 0; i < len; i++) {
+		if (string[i] == '\"')
+			isInString = !isInString;
+		if (!isWhitespace((unsigned char)string[i]) || isInString)
+			newStringSize++;
+	}
+	return newStringSize;
+}
+
+static void copyStringWithoutWhitespace(const char* string, uint32 len, char* newStringBuffer,
+                                        uint32 newStringLen) {
+	bool   isInString = false;
+	uint32 OriginalArrayOffset = 0;
+	for (uint32 i = 0; i - OriginalArrayOffset < newStringLen; i++) {
+		if (string[i] == '\"')
+			isInString = !isInString;
+		if (!isWhitespace((unsigned char)string[i]) || isInString)
+			newStringBuffer[i - OriginalArrayOffset] = string[i];
+		else
+			OriginalArrayOffset++;
+	}
+	newStringBuffer[newStringLen] = '\0';
+}
+
+static bool isCharInString(const char* string, const char character) {
+	if (strchr(string, character) != NULL)
+		return true;
+	else
+		return false;
+}
+
+static bool isAlphabeticChar(char character) {
+	return (bool)isalpha(character);
+}
+
+static bool areStringsEqual(const char* string1, const char* string2) {
+	if (!strcmp(string1, string2))
+		return true;
+	else
+		return false;
 }

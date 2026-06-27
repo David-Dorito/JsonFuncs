@@ -9,10 +9,10 @@ typedef struct {
 	uint8_t Level;
 } Player;
 
-char* FileToString(const char* filename);
+char* fileToString(const char* filename);
 
 int main(void) {
-	char* fileContents = FileToString("input.json");
+	char* fileContents = fileToString("input.json");
 
 	if (fileContents == NULL) {
 		printf("Failed to read JSON file.\n");
@@ -21,7 +21,7 @@ int main(void) {
 
 	Player player;
 
-	JsonField pFields[] = {
+	JsonField fields[] = {
 	    (JsonField){
 	        .KeyName = "Player.Username",
 	        .Destination = &player.Username,
@@ -35,7 +35,7 @@ int main(void) {
 	        .Type = JSONFUNCS_UINT8,
 	    },
 	};
-	JsonFuncs_Return ret = JsonFuncs_Deserialize(fileContents, pFields, sizeof(pFields) / sizeof(pFields[0]),
+	JsonFuncs_Return ret = JsonFuncs_Deserialize(fileContents, fields, sizeof(fields) / sizeof(fields[0]),
 	                                             JSONFUNCS_INPUT_JSONSTRING);
 	printf("error code: %d\n", ret);
 	if (ret != JSONFUNCS_OK) {
@@ -52,7 +52,7 @@ int main(void) {
 	return 0;
 }
 
-char* FileToString(const char* fileName) {
+char* fileToString(const char* fileName) {
 	FILE* file = fopen(fileName, "rb");
 	if (!file)
 		return NULL;
