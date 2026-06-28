@@ -87,7 +87,7 @@ static uint32           getStringWithoutWhitespaceLen(const char* string, uint32
 static void             copyStringWithoutWhitespace(const char* string, uint32 len, char* newStringBuffer,
                                                     uint32 newStringLen);
 static bool             isCharInString(const char* string, const char character);
-static bool             isAlphabeticChar(char character);
+static bool             isCharAlphabetic(char character);
 static bool             areStringsEqual(const char* string1, const char* string2);
 
 JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* fields, int fieldCount,
@@ -234,7 +234,7 @@ static int32 getTokenCount(char* json) {
 					return -1; // invalid json
 				i++;
 			}
-		} else if (isAlphabeticChar(json[i])) {
+		} else if (isCharAlphabetic(json[i])) {
 			const uint32 start = i;
 			while (isalpha(json[i]))
 				i++;
@@ -371,9 +371,9 @@ static JsonFuncs_Return fillTokenArray(Token* tokens, uint16 tokenCount, char* j
 			    .Type = type,
 			    .Value.CharValue = json[i],
 			};
-		} else if (isAlphabeticChar(json[i])) {
+		} else if (isCharAlphabetic(json[i])) {
 			const uint32 start = i;
-			while (isAlphabeticChar(json[i]))
+			while (isCharAlphabetic(json[i]))
 				i++;
 			const uint32 len = i - start;
 
@@ -430,7 +430,6 @@ static JsonFuncs_Return fillTokenArray(Token* tokens, uint16 tokenCount, char* j
 
 \**************************************/
 static JsonFuncs_Return assignValues(JsonField* fields, int fieldCount, Node* rootNode) {
-	uint8 result = JSONFUNCS_OK;
 	for (uint16 i = 0; i < fieldCount; i++) {
 		char        stringBuffer[BUFFER_SIZE];
 		const char* stringPointer = fields[i].KeyName; // will get incremented
@@ -441,15 +440,13 @@ static JsonFuncs_Return assignValues(JsonField* fields, int fieldCount, Node* ro
 					currentNode = &currentNode->ChildNodes[j];
 
 		if (currentNode->ChildCount != 1 || currentNode->ChildNodes[0].ChildCount != 0) {
-			result = JSONFUNCS_ERROR_NESTED_VALUE;
-			break;
+			return JSONFUNCS_ERROR_NESTED_VALUE;
 		}
 
-		// the part to assign values to the api caller defined places
+		// the part to assign values to the caller defined places
 		switch (currentNode->ChildNodes[0].Token->Type) {
 		case NUMBER:
 			switch (fields[i].Type) {
-			case JSONFUNCS_BOOL:
 			case JSONFUNCS_INT8:
 			case JSONFUNCS_UINT8:
 				*((uint8*)fields[i].Destination) = (uint8)currentNode->ChildNodes[0].Token->Value.NumValue;
@@ -462,17 +459,28 @@ static JsonFuncs_Return assignValues(JsonField* fields, int fieldCount, Node* ro
 			case JSONFUNCS_INT32:
 				*((uint32*)fields[i].Destination) = (uint32)currentNode->ChildNodes[0].Token->Value.NumValue;
 				break;
+			case JSONFUNCS_UINT64:
+			case JSONFUNCS_INT64:
+				*((uint64*)fields[i].Destination) = (uint64)currentNode->ChildNodes[0].Token->Value.NumValue;
+				break;
 			case JSONFUNCS_FLOAT:
 				*((float*)fields[i].Destination) = (float)currentNode->ChildNodes[0].Token->Value.NumValue;
 				break;
 			case JSONFUNCS_DOUBLE:
 				*((double*)fields[i].Destination) = currentNode->ChildNodes[0].Token->Value.NumValue;
 				break;
+			default:
+				return JSONFUNCS_ERROR_TYPE_MISMATCH;
 			};
 			break;
 		case BOOL:
-			*((uint8*)fields[i].Destination) = currentNode->ChildNodes[0].Token->Value.BoolValue;
-			break;
+			switch (fields[i].Type) {
+			case JSONFUNCS_BOOL:
+				*((uint8*)fields[i].Destination) = currentNode->ChildNodes[0].Token->Value.BoolValue;
+				break;
+			default:
+				return JSONFUNCS_ERROR_TYPE_MISMATCH;
+			}
 		case STRING:
 			switch (fields[i].Type) {
 			case JSONFUNCS_CHAR:
@@ -480,9 +488,13 @@ static JsonFuncs_Return assignValues(JsonField* fields, int fieldCount, Node* ro
 				break;
 			case JSONFUNCS_STRING:
 				char* copy = malloc(strlen(currentNode->ChildNodes[0].Token->Value.StringValue) + 1);
+				if (copy == NULL)
+					return JSONFUNCS_ERROR_MALLOC_FAILED;
 				strcpy(copy, currentNode->ChildNodes[0].Token->Value.StringValue);
 				*((char**)fields[i].Destination) = copy;
 				break;
+			default:
+				return JSONFUNCS_ERROR_TYPE_MISMATCH;
 			}
 			break;
 		case NULLVALUE:
@@ -493,7 +505,7 @@ static JsonFuncs_Return assignValues(JsonField* fields, int fieldCount, Node* ro
 			break;
 		}
 	}
-	return result;
+	return JSONFUNCS_OK;
 }
 
 /*************************************\
@@ -593,19 +605,15 @@ static JsonFuncs_Return buildTree(Token* tokens, uint16 start, uint16 end, Node*
 			result = JSONFUNCS_ERROR_INVALID_JSON;
 			goto cleanup;
 		}
-		uint8 jsonValidTest = 0;
+		bool isJsonValid = true;
 		switch (tokens[valueIndex].Type) {
-		case RIGHT_BRACE:
-			jsonValidTest = 1;
-			break;
 		case COLON:
-			jsonValidTest = 1;
-			break;
 		case COMMA:
-			jsonValidTest = 1;
+		case RIGHT_BRACE:
+			isJsonValid = false;
 			break;
 		}
-		if (jsonValidTest) {
+		if (!isJsonValid) {
 			result = JSONFUNCS_ERROR_INVALID_JSON;
 			goto cleanup;
 		}
@@ -796,7 +804,7 @@ static bool isCharInString(const char* string, const char character) {
 		return false;
 }
 
-static bool isAlphabeticChar(char character) {
+static bool isCharAlphabetic(char character) {
 	return (bool)isalpha(character);
 }
 
