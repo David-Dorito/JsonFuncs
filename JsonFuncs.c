@@ -89,6 +89,7 @@ static void             copyStringWithoutWhitespace(const char* string, uint32 l
 static bool             isCharInString(const char* string, const char character);
 static bool             isCharAlphabetic(char character);
 static bool             areStringsEqual(const char* string1, const char* string2);
+static uint8            getTypeSize(JsonFuncs_Type type);
 
 JsonFuncs_Return JsonFuncs_Deserialize(char* rawJson, JsonField* fields, int fieldCount,
                                        JsonFuncs_InputType fileOrString) {
@@ -444,6 +445,8 @@ static JsonFuncs_Return assignValues(JsonField* fields, int fieldCount, Node* ro
 		}
 
 		// the part to assign values to the caller defined places
+		if (fields[i].IsDestinationSet != NULL)
+			*((uint8*)fields[i].IsDestinationSet) = true;
 		switch (currentNode->ChildNodes[0].Token->Type) {
 		case NUMBER:
 			switch (fields[i].Type) {
@@ -498,7 +501,9 @@ static JsonFuncs_Return assignValues(JsonField* fields, int fieldCount, Node* ro
 			}
 			break;
 		case NULLVALUE:
-			memset(fields[i].Destination, 0, fields[i].Size);
+			memset(fields[i].Destination, 0, getTypeSize(fields[i].Type));
+			if (fields[i].IsDestinationSet != NULL)
+				*((uint8*)fields[i].IsDestinationSet) = false;
 			break;
 		default:
 			printf("this isnt supposed to happen\n");
@@ -813,4 +818,32 @@ static bool areStringsEqual(const char* string1, const char* string2) {
 		return true;
 	else
 		return false;
+}
+
+static uint8 getTypeSize(JsonFuncs_Type type) {
+	switch (type) {
+	case JSONFUNCS_CHAR:
+	case JSONFUNCS_BOOL:
+	case JSONFUNCS_UINT8:
+	case JSONFUNCS_INT8:
+		return sizeof(uint8);
+	case JSONFUNCS_UINT16:
+	case JSONFUNCS_INT16:
+		return sizeof(uint16);
+	case JSONFUNCS_UINT32:
+	case JSONFUNCS_INT32:
+		return sizeof(uint32);
+	case JSONFUNCS_UINT64:
+	case JSONFUNCS_INT64:
+		return sizeof(uint64);
+	case JSONFUNCS_FLOAT:
+		return sizeof(float);
+	case JSONFUNCS_DOUBLE:
+		return sizeof(double);
+	case JSONFUNCS_STRING:
+		return sizeof(char*);
+	case JSONFUNCS_ARRAY:
+		printf("JsonFuncs: Arrays not supported yet");
+		return 0;
+	}
 }

@@ -7,6 +7,7 @@
 typedef struct {
 	char*   Username;
 	uint8_t Level;
+	uint8_t IsLevelSet;
 } Player;
 
 char* fileToString(const char* filename);
@@ -25,13 +26,13 @@ int main(void) {
 	    (JsonField){
 	        .KeyName = "Player.Username",
 	        .Destination = &player.Username,
-	        .Size = sizeof(player.Username),
+	        .IsDestinationSet = NULL,
 	        .Type = JSONFUNCS_STRING,
 	    },
 	    (JsonField){
 	        .KeyName = "Player.Level",
 	        .Destination = &player.Level,
-	        .Size = sizeof(player.Level),
+	        .IsDestinationSet = &player.IsLevelSet,
 	        .Type = JSONFUNCS_UINT8,
 	    },
 	};
@@ -45,6 +46,7 @@ int main(void) {
 
 	printf("player username: %s\n", player.Username);
 	printf("player level: %d\n", player.Level);
+	printf("player level set: %d\n", player.IsLevelSet);
 
 	free(player.Username);
 	free(fileContents);

@@ -24,7 +24,7 @@ typedef enum {
 typedef struct {
 	const char*    KeyName;
 	void*          Destination;
-	size_t         Size;
+	void*          IsDestinationSet;
 	JsonFuncs_Type Type;
 } JsonField;
 
